@@ -1,0 +1,4 @@
+Air hockey server built on nodejs and websockets.
+
+Uses nodejs, available at http://github.com/ry/node
+Uses node.ws.js, available at http://github.com/ncr/node.ws.js
