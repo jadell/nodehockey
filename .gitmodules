@@ -1,0 +1,3 @@
+[submodule "vendor/node.ws.js"]
+	path = vendor/node.ws.js
+	url = git://github.com/ncr/node.ws.js.git
