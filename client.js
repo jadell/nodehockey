@@ -12,7 +12,7 @@ $("document").ready(function (){
 	// Initialize game board
 	var hockeytable = $("#hockeytable");
 	var board = new GameBoard(hockeytable);
-	board.renderBoard({
+	board.setEntities({
 		x : board.midX,
 		y : board.midY
 	},{
@@ -21,21 +21,28 @@ $("document").ready(function (){
 	},{
 		x : board.midX,
 		y : 0
-	});
+	})
+	.renderBoard();
 
 	hockeytable.mousemove(function (e) {
 		var x = e.pageX - this.offsetLeft;
 		var y = e.pageY - this.offsetTop;
-		board.renderBoard({
+		player = {
+			x : x,
+			y : y,
+			r : GameBoard.paddleRadius
+		};
+		board.setEntities({
 			x : board.midX,
 			y : board.midY
-		},{
-			x : x,
-			y : y
-		},{
+		}, player, {
 			x : board.midX,
 			y : 0
-		});
+		})
+		.renderBoard();
+
+		scaled = board.scaleToGame(player);
+		servermessage.html(scaled.x + ', ' + scaled.y + ', ' + scaled.r);
 	});
 });
 
@@ -65,19 +72,80 @@ var GameBoard = function (hockeytable) {
 	var prevPlayer = null;
 	var prevOpponent = null;
 
+	var currPuck = null;
+	var currPlayer = null;
+	var currOpponent = null;
+
 	var ctx = null;
 	if (board.getContext) {
 		ctx = board.getContext("2d");
 	}
 
 	return {
-		board        : board,
-		ctx          : ctx,
-		height       : height,
-		width        : width,
-		midX         : midX,
-		midY         : midY,
-		renderBoard  : renderBoard,
+		board         : board,
+		ctx           : ctx,
+		height        : height,
+		width         : width,
+		midX          : midX,
+		midY          : midY,
+		renderBoard   : renderBoard,
+		scaleToClient : scaleToClient,
+		scaleToGame   : scaleToGame,
+		setEntities   : setEntities,
+	}
+
+	/**
+	 * Sets the game entity positions
+	 *
+	 * @param puck       {x:X,y:Y} of origin
+	 * @param player     {x:X,y:Y} of origin
+	 * @param opponent   {x:X,y:Y} of origin
+	 * @return GameBoard
+	 */
+	function setEntities(puck, player, opponent) {
+		if (currPuck != null) {
+			prevPuck = currPuck;
+		}
+		currPuck = normalizePostion({
+			oX : 0,
+			oY : 0,
+			mX : width,
+			mY : height
+		}, {
+			x : puck.x,
+			y : puck.y,
+			radius: puckRadius
+		});
+
+		if (currPlayer != null) {
+			prevPlayer = currPlayer;
+		}
+		currPlayer = normalizePostion({
+			oX : 0,
+			oY : midY,
+			mX : width,
+			mY : height
+		}, {
+			x : player.x,
+			y : player.y,
+			radius: paddleRadius
+		});
+
+		if (currOpponent != null) {
+			prevOpponent = currOpponent;
+		}
+		currOpponent = normalizePostion({
+			oX : 0,
+			oY : 0,
+			mX : width,
+			mY : midY
+		}, {
+			x : opponent.x,
+			y : opponent.y,
+			radius: paddleRadius
+		});
+
+		return this;
 	}
 
 	/**
@@ -86,8 +154,9 @@ var GameBoard = function (hockeytable) {
 	 * @param puck       {x:X,y:Y} of origin
 	 * @param player     {x:X,y:Y} of origin
 	 * @param opponent   {x:X,y:Y} of origin
+	 * @return GameBoard
 	 */
-	function renderBoard(puck, player, opponent) {
+	function renderBoard() {
 		// Clear the previous state
 		ctx.beginPath();
 		ctx.fillStyle = fieldColor;
@@ -103,31 +172,20 @@ var GameBoard = function (hockeytable) {
 		ctx.closePath();
 
 		// Game pieces
-		renderPuck(puck);
-		renderPaddle(player, true);
-		renderPaddle(opponent, false);
+		renderPuck();
+		renderPaddle(true);
+		renderPaddle(false);
 
 		return this;
 	}
 
 	/**
 	 * Render the puck
-	 *
-	 * @param puck       {x:X,y:Y} of origin
 	 */
-	function renderPuck(puck) {
-		puck = normalizePostion({
-			x : width,
-			y : height
-		}, {
-			x : puck.x,
-			y : puck.y,
-			radius: puckRadius
-		});
-
+	function renderPuck() {
 		ctx.beginPath();
 		ctx.fillStyle = puckColor;
-		ctx.arc(puck.x,puck.y, puckRadius, radians(0),radians(360));
+		ctx.arc(currPuck.x,currPuck.y, puckRadius, radians(0),radians(360));
 		ctx.fill();
 		ctx.closePath();
 	}
@@ -135,23 +193,10 @@ var GameBoard = function (hockeytable) {
 	/**
 	 * Render a paddle
 	 *
-	 * @param paddle     {x:X,y:Y} of origin
 	 * @param player     true for player, false for opponent
 	 */
-	function renderPaddle(paddle, player) {
-		var minHeight = (player) ? midY : 0;
-		var maxHeight = (player) ? height : midY;
-		
-		paddle = normalizePostion({
-			oX : 0,
-			oY : minHeight,
-			mX : width,
-			mY : maxHeight
-		}, {
-			x : paddle.x,
-			y : paddle.y,
-			radius: paddleRadius
-		});
+	function renderPaddle(player) {
+		paddle = (player) ? currPlayer : currOpponent;
 
 		ctx.beginPath();
 		ctx.fillStyle = (player) ? playerColor : opponentColor;
@@ -195,5 +240,35 @@ var GameBoard = function (hockeytable) {
 	 */
 	function radians(degrees) {
 		return (Math.PI/180) * degrees;
+	}
+
+	/**
+	 * Translate game coords to client coords
+	 *
+	 * @param coord       {x:X, y:Y, r:radius}
+	 * @return {x:sX, y:sY, r:sRadius} coord scaled
+	 */
+	function scaleToClient(coords) {
+		scaled = {
+			x : coords.x,
+			y : coords.y,
+			r : coords.r
+		};
+		return scaled;
+	}
+
+	/**
+	 * Translate client coords to game coords
+	 *
+	 * @param coord       {x:X, y:Y, r:radius}
+	 * @return {x:sX, y:sY, r:sRadius} coord scaled
+	 */
+	function scaleToGame(coords) {
+		scaled = {
+			x : coords.x,
+			y : coords.y,
+			r : coords.r
+		};
+		return scaled;
 	}
 }
