@@ -30,7 +30,7 @@ $("document").ready(function (){
 		player = {
 			x : x,
 			y : y,
-			r : GameBoard.paddleRadius
+			r : paddleRadius
 		};
 		board.setEntities({
 			x : board.midX,
@@ -41,10 +41,18 @@ $("document").ready(function (){
 		})
 		.renderBoard();
 
-		scaled = board.scaleToGame(player);
-		servermessage.html(scaled.x + ', ' + scaled.y + ', ' + scaled.r);
+		scaledGame = board.scaleToGame(player);
+		scaledClient = board.scaleToClient(scaledGame);
+		servermessage.html(
+			'Original: ' + player.x + ', ' + player.y + ', ' + player.r + '<br>'
+			+ 'Game: ' + scaledGame.x + ', ' + scaledGame.y + ', ' + scaledGame.r + '<br>'
+			+ 'Client: ' + scaledClient.x + ', ' + scaledClient.y + ', ' + scaledClient.r + '<br>'
+		);
 	});
 });
+
+const puckRadius = 15;
+const paddleRadius = 20;
 
 /**
  * Returns a new GameBoard object
@@ -54,11 +62,7 @@ $("document").ready(function (){
  */
 var GameBoard = function (hockeytable) {
 	const fieldColor = "#FFFFFF";
-
-	const puckRadius = 15;
 	const puckColor = "#000000";
-
-	const paddleRadius = 20;
 	const playerColor = "#0000FF";
 	const opponentColor = "#FF0000";
 
@@ -250,10 +254,10 @@ var GameBoard = function (hockeytable) {
 	 */
 	function scaleToClient(coords) {
 		scaled = {
-			x : coords.x,
-			y : coords.y,
-			r : coords.r
-		};
+			x : Math.round(coords.x * width),
+			y : Math.round(coords.y * height),
+			r : Math.round(coords.r * width)
+		}
 		return scaled;
 	}
 
@@ -265,10 +269,10 @@ var GameBoard = function (hockeytable) {
 	 */
 	function scaleToGame(coords) {
 		scaled = {
-			x : coords.x,
-			y : coords.y,
-			r : coords.r
-		};
+			x : Math.floor((coords.x / width) * 1000) / 1000,
+			y : Math.floor((coords.y / height) * 1000) / 1000,
+			r : Math.floor((coords.r / width) * 1000) / 1000
+		}
 		return scaled;
 	}
 }
