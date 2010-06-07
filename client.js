@@ -1,153 +1,174 @@
-$("document").ready(function (){
-	var servermessage = $("#servermessage");
-	var servertimeout = null;
-
-	$("#requestbutton").click(function (e) {
-		servermessage.html("Button clicked");
-		servertimeout = setTimeout(function (){
-			servermessage.html("&nbsp;");
-		}, 1000);
-	});
-
+$("document").ready(function () {
 	// Initialize game board
 	var hockeytable = $("#hockeytable");
-	var board = new GameBoard(hockeytable);
-	board.setEntities({
-		x : board.midX,
-		y : board.midY
-	},{
-		x : board.midX,
-		y : board.height
-	},{
-		x : board.midX,
-		y : 0
-	})
-	.renderBoard();
+	var gameclient = new GameClient(hockeytable);
+});
 
+/**
+ * Returns a new game client
+ *
+ * @param hockeytable    a JQuery object wrapped around a canvas element
+ * @return GameClient object
+ */
+var GameClient = function (hockeytable) {
+	var initialstate = initialize();
+	var board = new GameBoard(hockeytable, initialstate);
+	board.setEntities(initialstate)
+		.renderBoard();
+
+	// Attach mousemove event to game board
 	hockeytable.mousemove(function (e) {
 		var x = e.pageX - this.offsetLeft;
 		var y = e.pageY - this.offsetTop;
 		player = {
 			x : x,
-			y : y,
-			r : paddleRadius
-		};
-		board.setEntities({
-			x : board.midX,
-			y : board.midY
-		}, player, {
-			x : board.midX,
-			y : 0
-		})
-		.renderBoard();
-
-		scaledGame = board.scaleToGame(player);
-		scaledClient = board.scaleToClient(scaledGame);
-		servermessage.html(
-			'Original: ' + player.x + ', ' + player.y + ', ' + player.r + '<br>'
-			+ 'Game: ' + scaledGame.x + ', ' + scaledGame.y + ', ' + scaledGame.r + '<br>'
-			+ 'Client: ' + scaledClient.x + ', ' + scaledClient.y + ', ' + scaledClient.r + '<br>'
-		);
+			y : y
+		}
+		sendToServer(player);
 	});
-});
 
-const puckRadius = 15;
-const paddleRadius = 20;
+	// Return client
+	
+	/**
+	 * Alert server of movement
+	 *
+	 * @param player    player state (client scaled)
+	 */
+	function sendToServer(player) {
+		// @todo: Add ws stuff; result handled by receiveFromServer
+		receiveFromServer(player);
+	}
+	
+	/**
+	 * Receive state from server and update client
+	 * @todo: Don't pass in the player here; we will get that from the server too
+	 */
+	function receiveFromServer(player) {
+		// @todo: Add ws stuff
+		board.setEntities({
+			puck : {
+				x : 0.5,
+				y : 0.5
+			}, 
+			player : board.scaleToGame(player),
+			opponent : {
+				x : 0.5,
+				y : 0
+			}})
+			.renderBoard();
+	}
+	
+	/**
+	 * Initialize connection
+	 *
+	 * @return initial game state
+	 */
+	function initialize() {
+		// @todo: Add ws stuff here
+		return {
+			puck : {
+				x : 0.5,
+				y : 0.5,
+				r : 0.05
+			},
+			player : {
+				x : 0.5,
+				y : 1.0,
+				r : 0.0667
+			},
+			opponent : {
+				x : 0.5,
+				y : 0.0,
+				r : 0.0667
+			}
+		}
+	}
+}
 
 /**
  * Returns a new GameBoard object
+ * Expects all coords and distances in terms of the game, not the client
  *
  * @param hockeytable    a JQuery object wrapped around a canvas element
+ * @param state          Initial state of all the game entities
  * @return GameBoard object
  */
-var GameBoard = function (hockeytable) {
+var GameBoard = function (hockeytable, state) {
 	const fieldColor = "#FFFFFF";
 	const puckColor = "#000000";
 	const playerColor = "#0000FF";
 	const opponentColor = "#FF0000";
 
 	var board = hockeytable.get(0);
+	var ctx = board.getContext("2d");
 	var width = hockeytable.attr("width");
 	var height = hockeytable.attr("height");
 	var midX = Math.round(width/2);
 	var midY = Math.round(height/2);
 
-	var prevPuck = null;
-	var prevPlayer = null;
-	var prevOpponent = null;
-
-	var currPuck = null;
-	var currPlayer = null;
-	var currOpponent = null;
-
-	var ctx = null;
-	if (board.getContext) {
-		ctx = board.getContext("2d");
+	var currState = scaleState(state, scaleToClient);
+	var puckRadius = currState.puck.r;
+	var paddleRadius = currState.player.r;
+	var prevState = {
+		puck     : null,
+		player   : null,
+		opponent : null
 	}
 
+	setEntities(currState);
+
 	return {
-		board         : board,
-		ctx           : ctx,
-		height        : height,
-		width         : width,
-		midX          : midX,
-		midY          : midY,
 		renderBoard   : renderBoard,
 		scaleToClient : scaleToClient,
 		scaleToGame   : scaleToGame,
+		scaleState    : scaleState,
 		setEntities   : setEntities,
 	}
 
 	/**
 	 * Sets the game entity positions
 	 *
-	 * @param puck       {x:X,y:Y} of origin
-	 * @param player     {x:X,y:Y} of origin
-	 * @param opponent   {x:X,y:Y} of origin
+	 * @param state    game state (puck, player and opponent)
 	 * @return GameBoard
 	 */
-	function setEntities(puck, player, opponent) {
-		if (currPuck != null) {
-			prevPuck = currPuck;
-		}
-		currPuck = normalizePostion({
-			oX : 0,
-			oY : 0,
-			mX : width,
-			mY : height
-		}, {
-			x : puck.x,
-			y : puck.y,
-			radius: puckRadius
-		});
+	function setEntities(state) {
+		state = scaleState(state, scaleToClient);
+		prevState = currState;
 
-		if (currPlayer != null) {
-			prevPlayer = currPlayer;
-		}
-		currPlayer = normalizePostion({
-			oX : 0,
-			oY : midY,
-			mX : width,
-			mY : height
-		}, {
-			x : player.x,
-			y : player.y,
-			radius: paddleRadius
-		});
+		currState = {
+			puck : normalizePostion({
+				oX : 0,
+				oY : 0,
+				mX : width,
+				mY : height
+			}, {
+				x : state.puck.x,
+				y : state.puck.y,
+				r : puckRadius
+			}),
 
-		if (currOpponent != null) {
-			prevOpponent = currOpponent;
+			player : normalizePostion({
+				oX : 0,
+				oY : midY,
+				mX : width,
+				mY : height
+			}, {
+				x : state.player.x,
+				y : state.player.y,
+				r : paddleRadius
+			}),
+
+			opponent : normalizePostion({
+				oX : 0,
+				oY : 0,
+				mX : width,
+				mY : midY
+			}, {
+				x : state.opponent.x,
+				y : state.opponent.y,
+				r : state.paddleRadius
+			})
 		}
-		currOpponent = normalizePostion({
-			oX : 0,
-			oY : 0,
-			mX : width,
-			mY : midY
-		}, {
-			x : opponent.x,
-			y : opponent.y,
-			radius: paddleRadius
-		});
 
 		return this;
 	}
@@ -189,7 +210,7 @@ var GameBoard = function (hockeytable) {
 	function renderPuck() {
 		ctx.beginPath();
 		ctx.fillStyle = puckColor;
-		ctx.arc(currPuck.x,currPuck.y, puckRadius, radians(0),radians(360));
+		ctx.arc(currState.puck.x,currState.puck.y, puckRadius, radians(0),radians(360));
 		ctx.fill();
 		ctx.closePath();
 	}
@@ -200,7 +221,7 @@ var GameBoard = function (hockeytable) {
 	 * @param player     true for player, false for opponent
 	 */
 	function renderPaddle(player) {
-		paddle = (player) ? currPlayer : currOpponent;
+		paddle = (player) ? currState.player : currState.opponent;
 
 		ctx.beginPath();
 		ctx.fillStyle = (player) ? playerColor : opponentColor;
@@ -218,16 +239,16 @@ var GameBoard = function (hockeytable) {
 		var newX = entity.x;
 		var newY = entity.y;
 
-		if (entity.x - entity.radius < bounds.oX) {
-			newX = bounds.oX + entity.radius;
-		} else if (entity.x + entity.radius > bounds.mX) {
-			newX = bounds.mX - entity.radius;
+		if (entity.x - entity.r < bounds.oX) {
+			newX = bounds.oX + entity.r;
+		} else if (entity.x + entity.r > bounds.mX) {
+			newX = bounds.mX - entity.r;
 		}
 
-		if (entity.y - entity.radius < bounds.oY) {
-			newY = bounds.oY + entity.radius;
-		} else if (entity.y + entity.radius > bounds.mY) {
-			newY = bounds.mY - entity.radius;
+		if (entity.y - entity.r < bounds.oY) {
+			newY = bounds.oY + entity.r;
+		} else if (entity.y + entity.r > bounds.mY) {
+			newY = bounds.mY - entity.r;
 		}
 
 		return {
@@ -274,5 +295,20 @@ var GameBoard = function (hockeytable) {
 			r : Math.floor((coords.r / width) * 1000) / 1000
 		}
 		return scaled;
+	}
+
+	/**
+	 * Scale state with given scaling function
+	 *
+	 * @param state     game state
+	 * @param scaler    function with which to scale state
+	 * @return scaled state
+	 */
+	function scaleState(state, scaler) {
+		return {
+			puck     : scaler(state.puck),
+			player   : scaler(state.player),
+			opponent : scaler(state.opponent)
+		}
 	}
 }
