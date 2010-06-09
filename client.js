@@ -11,10 +11,13 @@ $("document").ready(function () {
  * @return GameClient object
  */
 var GameClient = function (hockeytable) {
-	var initialstate = initialize();
-	var board = new GameBoard(hockeytable, initialstate);
-	board.setEntities(initialstate)
-		.renderBoard();
+	var board = new GameBoard(hockeytable);
+	var ws = new WebSocket("ws://localhost:8080");
+	ws.onmessage = function (evt) {
+		var data = evt.data;
+		var state = JSON.parse(data);
+		board.setEntities(state).renderBoard();
+	}
 
 	// Attach mousemove event to game board
 	hockeytable.mousemove(function (e) {
@@ -24,65 +27,8 @@ var GameClient = function (hockeytable) {
 			x : x,
 			y : y
 		}
-		sendToServer(player);
+		ws.send(JSON.stringify(board.scaleToGame(player)));
 	});
-
-	// Return client
-	
-	/**
-	 * Alert server of movement
-	 *
-	 * @param player    player state (client scaled)
-	 */
-	function sendToServer(player) {
-		// @todo: Add ws stuff; result handled by receiveFromServer
-		receiveFromServer(player);
-	}
-	
-	/**
-	 * Receive state from server and update client
-	 * @todo: Don't pass in the player here; we will get that from the server too
-	 */
-	function receiveFromServer(player) {
-		// @todo: Add ws stuff
-		board.setEntities({
-			puck : {
-				x : 0.5,
-				y : 0.5
-			}, 
-			player : board.scaleToGame(player),
-			opponent : {
-				x : 0.5,
-				y : 0
-			}})
-			.renderBoard();
-	}
-	
-	/**
-	 * Initialize connection
-	 *
-	 * @return initial game state
-	 */
-	function initialize() {
-		// @todo: Add ws stuff here
-		return {
-			puck : {
-				x : 0.5,
-				y : 0.5,
-				r : 0.05
-			},
-			player : {
-				x : 0.5,
-				y : 1.0,
-				r : 0.0667
-			},
-			opponent : {
-				x : 0.5,
-				y : 0.0,
-				r : 0.0667
-			}
-		}
-	}
 }
 
 /**
@@ -90,10 +36,9 @@ var GameClient = function (hockeytable) {
  * Expects all coords and distances in terms of the game, not the client
  *
  * @param hockeytable    a JQuery object wrapped around a canvas element
- * @param state          Initial state of all the game entities
  * @return GameBoard object
  */
-var GameBoard = function (hockeytable, state) {
+var GameBoard = function (hockeytable) {
 	const fieldColor = "#FFFFFF";
 	const puckColor = "#000000";
 	const playerColor = "#0000FF";
@@ -106,16 +51,11 @@ var GameBoard = function (hockeytable, state) {
 	var midX = Math.round(width/2);
 	var midY = Math.round(height/2);
 
-	var currState = scaleState(state, scaleToClient);
-	var puckRadius = currState.puck.r;
-	var paddleRadius = currState.player.r;
-	var prevState = {
+	var prevState = currState = {
 		puck     : null,
 		player   : null,
 		opponent : null
 	}
-
-	setEntities(currState);
 
 	return {
 		renderBoard   : renderBoard,
@@ -134,7 +74,6 @@ var GameBoard = function (hockeytable, state) {
 	function setEntities(state) {
 		state = scaleState(state, scaleToClient);
 		prevState = currState;
-
 		currState = {
 			puck : normalizePostion({
 				oX : 0,
@@ -144,7 +83,7 @@ var GameBoard = function (hockeytable, state) {
 			}, {
 				x : state.puck.x,
 				y : state.puck.y,
-				r : puckRadius
+				r : state.puck.r
 			}),
 
 			player : normalizePostion({
@@ -155,7 +94,7 @@ var GameBoard = function (hockeytable, state) {
 			}, {
 				x : state.player.x,
 				y : state.player.y,
-				r : paddleRadius
+				r : state.player.r
 			}),
 
 			opponent : normalizePostion({
@@ -166,7 +105,7 @@ var GameBoard = function (hockeytable, state) {
 			}, {
 				x : state.opponent.x,
 				y : state.opponent.y,
-				r : state.paddleRadius
+				r : state.opponent.r
 			})
 		}
 
@@ -210,7 +149,7 @@ var GameBoard = function (hockeytable, state) {
 	function renderPuck() {
 		ctx.beginPath();
 		ctx.fillStyle = puckColor;
-		ctx.arc(currState.puck.x,currState.puck.y, puckRadius, radians(0),radians(360));
+		ctx.arc(currState.puck.x,currState.puck.y, currState.puck.r, radians(0),radians(360));
 		ctx.fill();
 		ctx.closePath();
 	}
@@ -225,7 +164,7 @@ var GameBoard = function (hockeytable, state) {
 
 		ctx.beginPath();
 		ctx.fillStyle = (player) ? playerColor : opponentColor;
-		ctx.arc(paddle.x,paddle.y, paddleRadius, radians(0),radians(360));
+		ctx.arc(paddle.x,paddle.y, paddle.r, radians(0),radians(360));
 		ctx.fill();
 	}
 
@@ -253,7 +192,8 @@ var GameBoard = function (hockeytable, state) {
 
 		return {
 			x : newX,
-			y : newY
+			y : newY,
+			r : entity.r
 		};
 	}
 
