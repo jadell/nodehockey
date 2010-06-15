@@ -18,6 +18,9 @@ var GameClient = function (hockeytable) {
 		var state = JSON.parse(data);
 		board.setEntities(state).renderBoard();
 	}
+	ws.onclose = function () {
+		$('#servermessage').html('Connection closed by server.');
+	}
 
 	// Attach mousemove event to game board
 	hockeytable.mousemove(function (e) {
