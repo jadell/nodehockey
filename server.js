@@ -5,6 +5,33 @@ const PLAYER1 = 0;
 const PLAYER2 = 1;
 const SPECTATOR = 2;
 
+Object.prototype.clone = function () {
+	var c = this instanceof Array ? [] : {};
+	for (var i in this) {
+		var prop = this[i];
+
+		if (typeof prop == 'object') {
+			if (prop instanceof Array) {
+				c[i] = [];
+
+				for (var j = 0; j < prop.length; j++) {
+					if (typeof prop[j] != 'object') {
+						c[i].push(prop[j]);
+					} else {
+						c[i].push(prop[j].clone());
+					}
+				}
+			} else {
+				c[i] = prop.clone();
+			}
+		} else {
+			c[i] = prop;
+		}
+	}
+
+	return c;
+}
+
 function GameServer() {
 	var server = this;
 	this.clients = [];
@@ -36,24 +63,17 @@ function GameServer() {
 
 GameServer.prototype.resetState = function () {
 	this.state = {
-		puck    : { x : 0.5, y : 0.5, r : 0.05 },
-		player1 : { x : 0.5, y : 1.0, r : 0.0667 },
-		player2 : { x : 0.5, y : 0.0, r : 0.0667 }
+		puck    : this.boundPuck({    x : 0.5, y : 0.5, r : 0.05   }),
+		player1 : this.boundPlayer1({ x : 0.5, y : 1.0, r : 0.0667 }),
+		player2 : this.boundPlayer2({ x : 0.5, y : 0.0, r : 0.0667 })
 	}
-}
-
-GameServer.prototype.getState = function () {
-	return {
-		puck    : { x : this.state.puck.x,    y : this.state.puck.y,    r : this.state.puck.r },
-		player1 : { x : this.state.player1.x, y : this.state.player1.y, r : this.state.player1.r },
-		player2 : { x : this.state.player2.x, y : this.state.player2.y, r : this.state.player2.r },
-	}
+	sys.puts(sys.inspect(this.state));
 }
 
 GameServer.prototype.sendState = function () {
 	var gamestate;
-	for (i=0; i < this.clients.length; i++) {
-		gamestate = this.getState();
+	for (var i = 0; i < this.clients.length; i++) {
+		gamestate = this.state.clone();
 		if (i == PLAYER2) {
 			this.reverseState(gamestate);
 			gamestate.player = gamestate.player2;
@@ -74,22 +94,49 @@ GameServer.prototype.setPlayerPosition = function (client, position) {
 			this.reverseEntity(position);
 			this.state.player2.x = position.x;
 			this.state.player2.y = position.y;
+			this.boundPlayer2(this.state.player2);
 		} else {
 			this.state.player1.x = position.x;
 			this.state.player1.y = position.y;
+			this.boundPlayer1(this.state.player1);
 		}
 		this.sendState();
 	}
 }
 
 GameServer.prototype.reverseEntity = function (entity) {
-	entity.x = 1.0 - entity.x;
-	entity.y = 1.0 - entity.y;
+	entity.x = this.width  - entity.x;
+	entity.y = this.height - entity.y;
 }
 
 GameServer.prototype.reverseState = function (state) {
 	this.reverseEntity(state.player1);
 	this.reverseEntity(state.player2);
+}
+
+GameServer.prototype.boundEntity = function (entity, bounds) {
+	if (entity.x - entity.r < bounds.oX) {
+		entity.x = bounds.oX + entity.r;
+	} else if (entity.x + entity.r > bounds.mX) {
+		entity.x = bounds.mX - entity.r;
+	}
+
+	if (entity.y - entity.r < bounds.oY) {
+		entity.y = bounds.oY + entity.r;
+	} else if (entity.y + entity.r > bounds.mY) {
+		entity.y = bounds.mY - entity.r;
+	}
+
+	return entity;
+}
+GameServer.prototype.boundPuck = function (puck) {
+	return this.boundEntity(puck, { oX:0, oY:0, mX:1, mY:1 })
+}
+GameServer.prototype.boundPlayer1 = function (player) {
+	return this.boundEntity(player, { oX:0, oY:0.5, mX:1, mY:1 })
+}
+GameServer.prototype.boundPlayer2 = function (player) {
+	return this.boundEntity(player, { oX:0, oY:0, mX:1, mY:0.5 })
 }
 
 //////////////////////////////////////////////////////////////////////

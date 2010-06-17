@@ -54,7 +54,7 @@ var GameBoard = function (hockeytable) {
 	var midX = Math.round(width/2);
 	var midY = Math.round(height/2);
 
-	var prevState = currState = {
+	var currState = {
 		puck     : null,
 		player   : null,
 		opponent : null
@@ -76,40 +76,24 @@ var GameBoard = function (hockeytable) {
 	 */
 	function setEntities(state) {
 		state = scaleState(state, scaleToClient);
-		prevState = currState;
 		currState = {
-			puck : normalizePostion({
-				oX : 0,
-				oY : 0,
-				mX : width,
-				mY : height
-			}, {
+			puck : {
 				x : state.puck.x,
 				y : state.puck.y,
 				r : state.puck.r
-			}),
+			},
 
-			player : normalizePostion({
-				oX : 0,
-				oY : midY,
-				mX : width,
-				mY : height
-			}, {
+			player : {
 				x : state.player.x,
 				y : state.player.y,
 				r : state.player.r
-			}),
+			},
 
-			opponent : normalizePostion({
-				oX : 0,
-				oY : 0,
-				mX : width,
-				mY : midY
-			}, {
+			opponent : {
 				x : state.opponent.x,
 				y : state.opponent.y,
 				r : state.opponent.r
-			})
+			}
 		}
 
 		return this;
@@ -172,35 +156,6 @@ var GameBoard = function (hockeytable) {
 	}
 
 	/**
-	 * Make sure an entity is entirely within the game board
-	 * @param bounds       {oX:left bound, oY:topbound, mX:maxX, mY:maxY}
-	 * @param entity       {x:X of origin,y:Y of origin,r:radius}
-	 * @return {x:X, y:Y} new origin
-	 */
-	function normalizePostion(bounds, entity) {
-		var newX = entity.x;
-		var newY = entity.y;
-
-		if (entity.x - entity.r < bounds.oX) {
-			newX = bounds.oX + entity.r;
-		} else if (entity.x + entity.r > bounds.mX) {
-			newX = bounds.mX - entity.r;
-		}
-
-		if (entity.y - entity.r < bounds.oY) {
-			newY = bounds.oY + entity.r;
-		} else if (entity.y + entity.r > bounds.mY) {
-			newY = bounds.mY - entity.r;
-		}
-
-		return {
-			x : newX,
-			y : newY,
-			r : entity.r
-		};
-	}
-
-	/**
 	 * Convert degrees to radians
 	 *
 	 * @param degrees
@@ -222,6 +177,8 @@ var GameBoard = function (hockeytable) {
 			y : Math.round(coords.y * height),
 			r : Math.round(coords.r * width)
 		}
+		console.log(JSON.stringify(coords));
+		console.log(JSON.stringify(scaled));
 		return scaled;
 	}
 
@@ -233,9 +190,9 @@ var GameBoard = function (hockeytable) {
 	 */
 	function scaleToGame(coords) {
 		scaled = {
-			x : Math.floor((coords.x / width) * 1000) / 1000,
+			x : Math.floor((coords.x / height) * 1000) / 1000,
 			y : Math.floor((coords.y / height) * 1000) / 1000,
-			r : Math.floor((coords.r / width) * 1000) / 1000
+			r : Math.floor((coords.r / height) * 1000) / 1000
 		}
 		return scaled;
 	}
