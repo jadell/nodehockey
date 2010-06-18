@@ -173,12 +173,10 @@ var GameBoard = function (hockeytable) {
 	 */
 	function scaleToClient(coords) {
 		scaled = {
-			x : Math.round(coords.x * width),
+			x : Math.round(coords.x * height),
 			y : Math.round(coords.y * height),
-			r : Math.round(coords.r * width)
+			r : Math.round(coords.r * height)
 		}
-		console.log(JSON.stringify(coords));
-		console.log(JSON.stringify(scaled));
 		return scaled;
 	}
 

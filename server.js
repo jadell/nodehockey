@@ -35,6 +35,11 @@ Object.prototype.clone = function () {
 function GameServer() {
 	var server = this;
 	this.clients = [];
+	
+	this.height = 1.0;
+	this.width  = 0.75;
+	this.midH = this.height * 0.5;
+	this.midW = this.width  * 0.5;
 	this.resetState();
 	
 	ws.createServer(function (ws) {
@@ -63,11 +68,10 @@ function GameServer() {
 
 GameServer.prototype.resetState = function () {
 	this.state = {
-		puck    : this.boundPuck({    x : 0.5, y : 0.5, r : 0.05   }),
-		player1 : this.boundPlayer1({ x : 0.5, y : 1.0, r : 0.0667 }),
-		player2 : this.boundPlayer2({ x : 0.5, y : 0.0, r : 0.0667 })
+		puck    : this.boundPuck({    x : 0.5 * this.width, y : 0.5 * this.height, r : 0.0375   * this.height }),
+		player1 : this.boundPlayer1({ x : 0.5 * this.width, y : 1.0 * this.height, r : 0.05 * this.height }),
+		player2 : this.boundPlayer2({ x : 0.5 * this.width, y : 0.0 * this.height, r : 0.05 * this.height })
 	}
-	sys.puts(sys.inspect(this.state));
 }
 
 GameServer.prototype.sendState = function () {
@@ -130,13 +134,13 @@ GameServer.prototype.boundEntity = function (entity, bounds) {
 	return entity;
 }
 GameServer.prototype.boundPuck = function (puck) {
-	return this.boundEntity(puck, { oX:0, oY:0, mX:1, mY:1 })
+	return this.boundEntity(puck, { oX:0, oY:0, mX:this.width, mY:this.height })
 }
 GameServer.prototype.boundPlayer1 = function (player) {
-	return this.boundEntity(player, { oX:0, oY:0.5, mX:1, mY:1 })
+	return this.boundEntity(player, { oX:0, oY:this.midH, mX:this.width, mY:this.height })
 }
 GameServer.prototype.boundPlayer2 = function (player) {
-	return this.boundEntity(player, { oX:0, oY:0, mX:1, mY:0.5 })
+	return this.boundEntity(player, { oX:0, oY:0, mX:this.width, mY:this.midH })
 }
 
 //////////////////////////////////////////////////////////////////////
