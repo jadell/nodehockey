@@ -1,25 +1,34 @@
 $("document").ready(function () {
 	// Initialize game board
 	var hockeytable = $("#hockeytable");
-	var gameclient = new GameClient(hockeytable);
+	var servermessage = $("#servermessage");
+	var gameclient = new GameClient(hockeytable, servermessage);
 });
 
 /**
  * Returns a new game client
  *
- * @param hockeytable    a JQuery object wrapped around a canvas element
+ * @param hockeytable      a JQuery object wrapped around a canvas element
+ * @param servermessage    a JQuery object wrapped around the element in which to display server messages
  * @return GameClient object
  */
-var GameClient = function (hockeytable) {
+var GameClient = function (hockeytable, servermessage) {
 	var board = new GameBoard(hockeytable);
+	
+	var setServerMessage = function (message) {
+		servermessage.html(message.replace(/\n/g, '<br />') + '<br />' + servermessage.html());
+	}
+	
 	var ws = new WebSocket("ws://localhost:8080");
 	ws.onmessage = function (evt) {
-		var data = evt.data;
-		var state = JSON.parse(data);
-		board.setEntities(state).renderBoard();
+		var data = JSON.parse(evt.data);
+		if (data.message) {
+			setServerMessage(data.message);
+		}
+		board.setEntities(data.state).renderBoard();
 	}
 	ws.onclose = function () {
-		$('#servermessage').html('Connection closed by server.');
+		setServerMessage('Connection closed by server.');
 	}
 
 	// Attach mousemove event to game board

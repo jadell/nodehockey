@@ -75,7 +75,8 @@ GameServer.prototype.resetState = function () {
 }
 
 GameServer.prototype.sendState = function () {
-	var gamestate;
+	var sendstate,
+		gamestate;
 	for (var i = 0; i < this.clients.length; i++) {
 		gamestate = this.state.clone();
 		if (i == PLAYER2) {
@@ -88,7 +89,13 @@ GameServer.prototype.sendState = function () {
 		}
 		delete gamestate.player1;
 		delete gamestate.player2;
-		this.clients[i].sendState(gamestate);
+		
+		sendstate = {
+			state : gamestate,
+			message : null
+		}
+		
+		this.clients[i].sendState(sendstate);
 	}
 }
 
