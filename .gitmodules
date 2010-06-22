@@ -1,3 +1,6 @@
 [submodule "vendor/node.ws.js"]
 	path = vendor/node.ws.js
 	url = git://github.com/ncr/node.ws.js.git
+[submodule "vendor/box2dnode"]
+	path = vendor/box2dnode
+	url = git://github.com/jadell/box2dnode.git
