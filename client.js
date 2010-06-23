@@ -13,34 +13,41 @@ $("document").ready(function () {
  * @return GameClient object
  */
 var GameClient = function (hockeytable, servermessage) {
-	var board = new GameBoard(hockeytable);
 	
 	var setServerMessage = function (message) {
 		servermessage.html(message.replace(/\n/g, '<br />') + '<br />' + servermessage.html());
 	}
-	
+
+	var board = null;
 	var ws = new WebSocket("ws://localhost:8080");
 	ws.onmessage = function (evt) {
 		var data = JSON.parse(evt.data);
+
+		if (data.type == 'init') {
+			board = new GameBoard(hockeytable, data.table);
+		} else if (data.type == 'state') {
+			board.setEntities(data.state).renderBoard();
+		}
+		
 		if (data.message) {
 			setServerMessage(data.message);
 		}
-		board.setEntities(data.state).renderBoard();
 	}
 	ws.onclose = function () {
 		setServerMessage('Connection closed by server.');
 	}
 
 	// Attach mousemove event to game board
-	hockeytable.mousemove(function (e) {
-		var x = e.pageX - this.offsetLeft;
-		var y = e.pageY - this.offsetTop;
-		player = {
-			x : x,
-			y : y
-		}
-		ws.send(JSON.stringify(board.scaleToGame(player)));
-	});
+// 	hockeytable.mousemove(function (e) {
+// 		var x = e.pageX - this.offsetLeft;
+// 		var y = e.pageY - this.offsetTop;
+// 		player = {
+// 			x : x,
+// 			y : y
+// 		}
+// //		ws.send(JSON.stringify(board.scaleToGame(player)));
+// 		ws.send(JSON.stringify(board.scaleToGame(player)));
+// 	});
 }
 
 /**
@@ -48,9 +55,10 @@ var GameClient = function (hockeytable, servermessage) {
  * Expects all coords and distances in terms of the game, not the client
  *
  * @param hockeytable    a JQuery object wrapped around a canvas element
+ * @param inittable      initial table dimensions
  * @return GameBoard object
  */
-var GameBoard = function (hockeytable) {
+var GameBoard = function (hockeytable, inittable) {
 	const fieldColor = "#FFFFFF";
 	const puckColor = "#000000";
 	const playerColor = "#0000FF";
@@ -58,10 +66,20 @@ var GameBoard = function (hockeytable) {
 
 	var board = hockeytable.get(0);
 	var ctx = board.getContext("2d");
-	var width = hockeytable.attr("width");
-	var height = hockeytable.attr("height");
-	var midX = Math.round(width/2);
-	var midY = Math.round(height/2);
+	
+	var serverHeight = inittable.height;
+	var serverWidth  = inittable.width;
+	var tableRatio = serverWidth / serverHeight;
+	
+	var height = 400;
+	var width = height * tableRatio;
+ 	var midX = Math.round(width/2);
+ 	var midY = Math.round(height/2);
+	
+	hockeytable.attr("width", width);
+	hockeytable.attr("height", height);
+
+	var serverRatio = height / serverHeight;
 
 	var currState = {
 		puck     : null,
@@ -125,7 +143,7 @@ var GameBoard = function (hockeytable) {
 		
 		// Border and mid-field
 		ctx.beginPath();
-		ctx.strokeRect(0,0, width,height);
+		ctx.strokeRect(0,0, width-1,height);
 		ctx.moveTo(0, midY);
 		ctx.lineTo(width, midY);
 		ctx.stroke();
@@ -182,9 +200,9 @@ var GameBoard = function (hockeytable) {
 	 */
 	function scaleToClient(coords) {
 		scaled = {
-			x : Math.round(coords.x * height),
-			y : Math.round(coords.y * height),
-			r : Math.round(coords.r * height)
+			x : Math.round(coords.x * serverRatio),
+			y : height - (Math.round(coords.y * serverRatio)),
+			r : Math.round(coords.r * serverRatio)
 		}
 		return scaled;
 	}
@@ -197,9 +215,9 @@ var GameBoard = function (hockeytable) {
 	 */
 	function scaleToGame(coords) {
 		scaled = {
-			x : Math.floor((coords.x / height) * 1000) / 1000,
-			y : Math.floor((coords.y / height) * 1000) / 1000,
-			r : Math.floor((coords.r / height) * 1000) / 1000
+			x : Math.floor((coords.x / serverRatio) * 1000) / 1000,
+			y : height - (Math.floor((coords.y / serverRatio) * 1000) / 1000),
+			r : Math.floor((coords.r / serverRatio) * 1000) / 1000
 		}
 		return scaled;
 	}
