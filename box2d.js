@@ -75,6 +75,14 @@ GameWorld.prototype.createPlayer = function (player) {
 	body.SetMassFromShapes();
 
 	var handleJointDef = new b2d.b2MouseJointDef();
+	handleJointDef.body1 = this.world.m_groundBody;
+	handleJointDef.body2 = body;
+	handleJointDef.collideConnected = true;
+	handleJointDef.maxForce = 10000.0 * body.GetMass();
+	handleJointDef.target = body.GetPosition();
+	handleJointDef.dampingRatio = 0;
+	handleJointDef.frequencyHz = 100;
+	body.handle = this.world.CreateJoint(handleJointDef);
 	
 	if (player == 1) {
 		this.player1 = body;
@@ -163,6 +171,15 @@ GameWorld.prototype.getTableDimensions = function () {
 	}
 }
 GameWorld.prototype.updatePlayerPosition = function (player, x, y) {
+	var newPosition = new b2d.b2Vec2(x, y);
+	player.WakeUp();
+	player.handle.SetTarget(newPosition);
+}
+GameWorld.prototype.updatePlayer1Position = function (x, y) {
+	this.updatePlayerPosition(this.player1, x, y);
+}
+GameWorld.prototype.updatePlayer2Position = function (x, y) {
+	this.updatePlayerPosition(this.player2, x, y);
 }
 
 GameWorld.prototype.world = null;
@@ -259,6 +276,10 @@ GameClient.prototype.sendTable = function (table, message) {
 			var clientNum = server.clients.length;
 			server.clients[clientNum] = new GameClient(ws, clientNum)
 				.sendTable(game.getTableDimensions(), 'Initial table');
+		})
+		.addListener("data", function (data) {
+			position = JSON.parse(data);
+			game.updatePlayer1Position(position.x, position.y);
 		});
 	}).listen(8080);
 })();

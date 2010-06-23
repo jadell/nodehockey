@@ -38,16 +38,15 @@ var GameClient = function (hockeytable, servermessage) {
 	}
 
 	// Attach mousemove event to game board
-// 	hockeytable.mousemove(function (e) {
-// 		var x = e.pageX - this.offsetLeft;
-// 		var y = e.pageY - this.offsetTop;
-// 		player = {
-// 			x : x,
-// 			y : y
-// 		}
-// //		ws.send(JSON.stringify(board.scaleToGame(player)));
-// 		ws.send(JSON.stringify(board.scaleToGame(player)));
-// 	});
+	hockeytable.mousemove(function (e) {
+		var x = e.pageX - this.offsetLeft;
+		var y = e.pageY - this.offsetTop;
+		player = board.scaleToGame({
+			x : x,
+			y : y
+		});
+		ws.send(JSON.stringify(player));
+	});
 }
 
 /**
@@ -216,7 +215,7 @@ var GameBoard = function (hockeytable, inittable) {
 	function scaleToGame(coords) {
 		scaled = {
 			x : Math.floor((coords.x / serverRatio) * 1000) / 1000,
-			y : height - (Math.floor((coords.y / serverRatio) * 1000) / 1000),
+			y : Math.floor(((height - coords.y) / serverRatio) * 1000) / 1000,
 			r : Math.floor((coords.r / serverRatio) * 1000) / 1000
 		}
 		return scaled;
