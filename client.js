@@ -199,9 +199,9 @@ var GameBoard = function (hockeytable, inittable) {
 	 */
 	function scaleToClient(coords) {
 		scaled = {
-			x : Math.round(coords.x * serverRatio),
-			y : height - (Math.round(coords.y * serverRatio)),
-			r : Math.round(coords.r * serverRatio)
+			x : coords.x * serverRatio,
+			y : height - (coords.y * serverRatio),
+			r : coords.r * serverRatio
 		}
 		return scaled;
 	}
@@ -214,9 +214,9 @@ var GameBoard = function (hockeytable, inittable) {
 	 */
 	function scaleToGame(coords) {
 		scaled = {
-			x : Math.floor((coords.x / serverRatio) * 1000) / 1000,
-			y : Math.floor(((height - coords.y) / serverRatio) * 1000) / 1000,
-			r : Math.floor((coords.r / serverRatio) * 1000) / 1000
+			x : coords.x / serverRatio,
+			y : (height - coords.y) / serverRatio,
+			r : coords.r / serverRatio
 		}
 		return scaled;
 	}
