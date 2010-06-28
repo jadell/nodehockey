@@ -48,10 +48,16 @@ GameWorld.prototype.createPuck = function () {
 	var puckShapeDef = new b2d.b2CircleDef();
 	puckShapeDef.radius = this.puck_radius;
 	puckShapeDef.density = this.puck_density;
-	puckShapeDef.restitution = 0;
+	puckShapeDef.friction = 0.1;
+	puckShapeDef.restitution = .95;
+
+	var puckFilter = new b2d.b2FilterData();
+	puckFilter.groupIndex = -1;
+	puckShapeDef.filter = puckFilter;
 
 	var puckBodyDef = new b2d.b2BodyDef();
 	puckBodyDef.position.Set(this.table_halfwidth, this.table_halfheight);
+	puckBodyDef.bullet = true;
 
 	this.puck = this.world.CreateBody(puckBodyDef);
 	this.puck.CreateShape(puckShapeDef);
@@ -91,35 +97,44 @@ GameWorld.prototype.createPlayer = function (player) {
 	}
 }
 GameWorld.prototype.createTableBoundaries = function () {
-	var sideThicknessHalf = 0.1;
-
 	// Table top and bottom
 	var endBodyDef = new b2d.b2BodyDef();
 	var endShapeDef = new b2d.b2PolygonDef();
-	endShapeDef.SetAsBox(this.table_halfwidth, sideThicknessHalf);
-	endShapeDef.restitution = 0;
+	endShapeDef.SetAsBox(this.table_halfwidth, this.table_sideThicknessHalf);
 
-	endBodyDef.position.Set(this.table_halfwidth, this.table_height + sideThicknessHalf);
+	endBodyDef.position.Set(this.table_halfwidth, this.table_height + this.table_sideThicknessHalf);
 	var topEndBody = this.world.CreateBody(endBodyDef);
 	topEndBody.CreateShape(endShapeDef);
 
-	endBodyDef.position.Set(this.table_halfwidth, -sideThicknessHalf);
+	endBodyDef.position.Set(this.table_halfwidth, -this.table_sideThicknessHalf);
 	var bottomEndBody = this.world.CreateBody(endBodyDef);
 	bottomEndBody.CreateShape(endShapeDef);
 
 	// Table sides
 	var sideBodyDef = new b2d.b2BodyDef();
 	var sideShapeDef = new b2d.b2PolygonDef();
-	sideShapeDef.SetAsBox(sideThicknessHalf, this.table_halfheight);
-	endShapeDef.restitution = 0;
+	sideShapeDef.SetAsBox(this.table_sideThicknessHalf, this.table_halfheight);
 
-	sideBodyDef.position.Set(this.table_width + sideThicknessHalf, this.table_halfheight);
+	sideBodyDef.position.Set(this.table_width + this.table_sideThicknessHalf, this.table_halfheight);
 	var rightSideBody = this.world.CreateBody(sideBodyDef);
 	rightSideBody.CreateShape(sideShapeDef);
 
-	sideBodyDef.position.Set(-sideThicknessHalf, this.table_halfheight);
+	sideBodyDef.position.Set(-this.table_sideThicknessHalf, this.table_halfheight);
 	var leftSideBody = this.world.CreateBody(sideBodyDef);
 	leftSideBody.CreateShape(sideShapeDef);
+	
+	// Mid-field os a line that puck can cross but not paddles
+	var midfieldShapeDef = new b2d.b2PolygonDef();
+	var midfieldFilter = new b2d.b2FilterData();
+	var midfieldBodyDef = new b2d.b2BodyDef();
+
+	midfieldShapeDef.SetAsBox(this.table_halfwidth, this.table_midfieldThicknessHalf);
+	midfieldFilter.groupIndex = -1;
+	midfieldShapeDef.filter = midfieldFilter;
+	
+	midfieldBodyDef.position.Set(this.table_halfwidth, this.table_halfheight);
+	var midfieldBody = this.world.CreateBody(midfieldBodyDef);
+	midfieldBody.CreateShape(midfieldShapeDef);
 }
 GameWorld.prototype.createWorld = function () {
 	var worldAABB = new b2d.b2AABB();
@@ -188,12 +203,19 @@ GameWorld.prototype.world_halfheight = 25;
 GameWorld.prototype.simulationTimeStep = 1.0 / 60.0;
 GameWorld.prototype.simulationIterations = 10;
 GameWorld.prototype.runIntervalId = null;
-GameWorld.prototype.frameRate = 200;
+GameWorld.prototype.frameRate = 75;
 // Tables dimensions
 GameWorld.prototype.table_width = 1.32;
 GameWorld.prototype.table_height = 2.54;
 GameWorld.prototype.table_halfwidth = GameWorld.prototype.table_width / 2;
 GameWorld.prototype.table_halfheight = GameWorld.prototype.table_height / 2;
+// Boundary dimensions
+GameWorld.prototype.table_sideThickness = 0.2;
+GameWorld.prototype.table_midfieldThickness = 0.02;
+GameWorld.prototype.table_sideThicknessHalf =
+	GameWorld.prototype.table_sideThickness / 2;
+GameWorld.prototype.table_midfieldThicknessHalf =
+	GameWorld.prototype.table_midfieldThickness / 2;
 // Paddle dimensions
 GameWorld.prototype.paddle_radius = 0.1;
 GameWorld.prototype.paddle_mass = 0.09;
@@ -201,7 +223,7 @@ GameWorld.prototype.paddle_density =
 	GameWorld.prototype.paddle_mass / (b2d.b2Settings.b2_pi * GameWorld.prototype.paddle_radius * GameWorld.prototype.paddle_radius);
 // Puck dimensions
 GameWorld.prototype.puck_radius = 0.08;
-GameWorld.prototype.puck_mass = 0.07;
+GameWorld.prototype.puck_mass = 0.09;
 GameWorld.prototype.puck_density =
 	GameWorld.prototype.puck_mass / (b2d.b2Settings.b2_pi * GameWorld.prototype.puck_radius * GameWorld.prototype.puck_radius);
 // Game entities
@@ -211,7 +233,16 @@ GameWorld.prototype.player2 = null;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Client
-function GameClient(ws, id) {
+function GameClient(ws, id, game) {
+	var client = this;
+	ws.addListener("connect", function () {
+			client.sendTable(game.getTableDimensions(), 'Initial table');
+		})
+		.addListener("data", function (data) {
+			position = JSON.parse(data);
+			game.updatePlayer1Position(position.x, position.y);
+		});
+
 	this.ws = ws;
 	this.id = id;
 	this.setPov(GameClient.Player1Pov);
@@ -226,6 +257,11 @@ GameClient.prototype.setPov = function (pov) {
 	}
 	return this;
 }
+GameClient.prototype.send = function (type, data, message) {
+	data.type = type;
+	data.message = message;
+	this.ws.write(JSON.stringify(data));
+}
 GameClient.prototype.sendState = function (state, message) {
 	if (this.pov == GameClient.Player2Pov) {
 		this.reverseState(state);
@@ -238,25 +274,16 @@ GameClient.prototype.sendState = function (state, message) {
 	delete state.player1;
 	delete state.player2;
 
-	this.ws.write(JSON.stringify({
-		state : state,
-		message : message,
-		type : 'state'
-	}));
+	this.send('state', { state : state }, message);
 	return this;
 }
 GameClient.prototype.sendTable = function (table, message) {
-	this.ws.write(JSON.stringify({
-		table : table,
-		message : message,
-		type : 'init'
-	}));
-	return this;
-};
+	this.send('init', { table : table }, message);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Main server loop
-(function () {
+;(function () {
 	var server = this;
 	this.clients = [];
 
@@ -266,20 +293,10 @@ GameClient.prototype.sendTable = function (table, message) {
 			server.clients[clientNum].sendState(clone(state), null);
 		}
 	})
-	// .addListener("step", function (state) {
-	// 	sys.puts(sys.inspect(state));
-	// })
 	.run();
 	
 	ws.createServer(function (ws) {
-		ws.addListener("connect", function () {
-			var clientNum = server.clients.length;
-			server.clients[clientNum] = new GameClient(ws, clientNum)
-				.sendTable(game.getTableDimensions(), 'Initial table');
-		})
-		.addListener("data", function (data) {
-			position = JSON.parse(data);
-			game.updatePlayer1Position(position.x, position.y);
-		});
+		var clientNum = server.clients.length;
+		server.clients[clientNum] = new GameClient(ws, clientNum, game);
 	}).listen(8080);
 })();
