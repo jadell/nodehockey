@@ -66,19 +66,21 @@ var GameBoard = function (hockeytable, inittable) {
 	var board = hockeytable.get(0);
 	var ctx = board.getContext("2d");
 	
-	var serverHeight = inittable.height;
-	var serverWidth  = inittable.width;
-	var tableRatio = serverWidth / serverHeight;
+	var tableHeight = inittable.height;
+	var tableWidth  = inittable.width;
+	var tableMidX   = tableWidth/2;
+ 	var tableMidY   = tableHeight/2;
+	var tableRatio  = tableWidth / tableHeight;
 	
 	var height = 400;
 	var width = height * tableRatio;
- 	var midX = Math.round(width/2);
- 	var midY = Math.round(height/2);
-	
-	hockeytable.attr("width", width);
+ 	hockeytable.attr("width", width);
 	hockeytable.attr("height", height);
 
-	var serverRatio = height / serverHeight;
+	var scaleFactor = height / tableHeight;
+	var singlePixel = 1 / scaleFactor;
+	ctx.scale(scaleFactor, -scaleFactor);
+	ctx.translate(0, -tableHeight);
 
 	var currState = {
 		puck     : null,
@@ -88,9 +90,7 @@ var GameBoard = function (hockeytable, inittable) {
 
 	return {
 		renderBoard   : renderBoard,
-		scaleToClient : scaleToClient,
 		scaleToGame   : scaleToGame,
-		scaleState    : scaleState,
 		setEntities   : setEntities,
 	}
 
@@ -101,7 +101,6 @@ var GameBoard = function (hockeytable, inittable) {
 	 * @return GameBoard
 	 */
 	function setEntities(state) {
-		state = scaleState(state, scaleToClient);
 		currState = {
 			puck : {
 				x : state.puck.x,
@@ -137,16 +136,18 @@ var GameBoard = function (hockeytable, inittable) {
 		// Clear the previous state
 		ctx.beginPath();
 		ctx.fillStyle = fieldColor;
-		ctx.fillRect(0,0, width,height);
+		ctx.fillRect(0,0, tableWidth,tableHeight);
 		ctx.closePath();
 		
 		// Border and mid-field
-		ctx.beginPath();
-		ctx.strokeRect(0,0, width-1,height);
-		ctx.moveTo(0, midY);
-		ctx.lineTo(width, midY);
-		ctx.stroke();
-		ctx.closePath();
+ 		ctx.beginPath();
+		ctx.lineWidth = singlePixel;
+ 		ctx.strokeRect(0,0, tableWidth-singlePixel,tableHeight);
+		ctx.lineWidth = singlePixel*3;
+ 		ctx.moveTo(0, tableMidY);
+ 		ctx.lineTo(tableWidth, tableMidY);
+ 		ctx.stroke();
+ 		ctx.closePath();
 
 		// Game pieces
 		renderPuck();
@@ -192,21 +193,6 @@ var GameBoard = function (hockeytable, inittable) {
 	}
 
 	/**
-	 * Translate game coords to client coords
-	 *
-	 * @param coord       {x:X, y:Y, r:radius}
-	 * @return {x:sX, y:sY, r:sRadius} coord scaled
-	 */
-	function scaleToClient(coords) {
-		scaled = {
-			x : coords.x * serverRatio,
-			y : height - (coords.y * serverRatio),
-			r : coords.r * serverRatio
-		}
-		return scaled;
-	}
-
-	/**
 	 * Translate client coords to game coords
 	 *
 	 * @param coord       {x:X, y:Y, r:radius}
@@ -214,25 +200,10 @@ var GameBoard = function (hockeytable, inittable) {
 	 */
 	function scaleToGame(coords) {
 		scaled = {
-			x : coords.x / serverRatio,
-			y : (height - coords.y) / serverRatio,
-			r : coords.r / serverRatio
+			x : coords.x / scaleFactor,
+			y : (height - coords.y) / scaleFactor,
+			r : coords.r / scaleFactor
 		}
 		return scaled;
-	}
-
-	/**
-	 * Scale state with given scaling function
-	 *
-	 * @param state     game state
-	 * @param scaler    function with which to scale state
-	 * @return scaled state
-	 */
-	function scaleState(state, scaler) {
-		return {
-			puck     : scaler(state.puck),
-			player   : scaler(state.player),
-			opponent : scaler(state.opponent)
-		}
 	}
 }

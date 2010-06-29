@@ -237,6 +237,7 @@ function GameClient(ws, id, game) {
 	var client = this;
 	ws.addListener("connect", function () {
 			client.sendTable(game.getTableDimensions(), 'Initial table');
+			client.ready = true;
 		})
 		.addListener("data", function (data) {
 			position = JSON.parse(data);
@@ -263,6 +264,10 @@ GameClient.prototype.send = function (type, data, message) {
 	this.ws.write(JSON.stringify(data));
 }
 GameClient.prototype.sendState = function (state, message) {
+	if (this.ready == false) {
+		return this;
+	}
+
 	if (this.pov == GameClient.Player2Pov) {
 		this.reverseState(state);
 		state.player = state.player2;
@@ -280,6 +285,7 @@ GameClient.prototype.sendState = function (state, message) {
 GameClient.prototype.sendTable = function (table, message) {
 	this.send('init', { table : table }, message);
 }
+GameClient.prototype.ready = false;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Main server loop
