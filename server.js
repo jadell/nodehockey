@@ -48,8 +48,8 @@ GameWorld.prototype.createPuck = function () {
 	var puckShapeDef = new b2d.b2CircleDef();
 	puckShapeDef.radius = this.puck_radius;
 	puckShapeDef.density = this.puck_density;
-	puckShapeDef.friction = 0.1;
-	puckShapeDef.restitution = .95;
+	puckShapeDef.friction = this.puck_friction;
+	puckShapeDef.restitution = this.puck_restitution;
 
 	var puckFilter = new b2d.b2FilterData();
 	puckFilter.groupIndex = -1;
@@ -64,12 +64,13 @@ GameWorld.prototype.createPuck = function () {
 	this.puck.SetMassFromShapes();
 }
 GameWorld.prototype.createPlayer = function (player) {
-	var playerBodyDef = new b2d.b2BodyDef();
 	var playerShapeDef = new b2d.b2CircleDef();
 	playerShapeDef.radius = this.paddle_radius;
 	playerShapeDef.density = this.paddle_density;
-	playerShapeDef.restitution = 0;
+	playerShapeDef.friction = this.paddle_friction;
+	playerShapeDef.restitution = this.paddle_restitution;
 
+	var playerBodyDef = new b2d.b2BodyDef();
 	if (player == 1) {
 		playerBodyDef.position.Set(this.table_halfwidth, this.paddle_radius);
 	} else {
@@ -221,11 +222,15 @@ GameWorld.prototype.paddle_radius = 0.1;
 GameWorld.prototype.paddle_mass = 0.09;
 GameWorld.prototype.paddle_density =
 	GameWorld.prototype.paddle_mass / (b2d.b2Settings.b2_pi * GameWorld.prototype.paddle_radius * GameWorld.prototype.paddle_radius);
+GameWorld.prototype.paddle_friction = 0;
+GameWorld.prototype.paddle_restitution = 0;
 // Puck dimensions
 GameWorld.prototype.puck_radius = 0.08;
-GameWorld.prototype.puck_mass = 0.09;
+GameWorld.prototype.puck_mass = 4.0;
 GameWorld.prototype.puck_density =
 	GameWorld.prototype.puck_mass / (b2d.b2Settings.b2_pi * GameWorld.prototype.puck_radius * GameWorld.prototype.puck_radius);
+GameWorld.prototype.puck_friction = 0.1;
+GameWorld.prototype.puck_restitution = 0.95;
 // Game entities
 GameWorld.prototype.puck = null;
 GameWorld.prototype.player1 = null;
