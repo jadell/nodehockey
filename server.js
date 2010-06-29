@@ -233,30 +233,37 @@ GameWorld.prototype.player2 = null;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Client
-function GameClient(ws, id, game) {
+function GameClient(server, game, ws, id, type) {
+	this.server = server;
+	this.game = game;
+	this.ws = ws;
+	this.id = id;
+	this.type = type;
+	this.pov = type;
+	this.table = game.getTableDimensions();
+
 	var client = this;
-	ws.addListener("connect", function () {
-			client.sendTable(game.getTableDimensions(), 'Initial table');
+	this.ws.addListener("connect", function () {
+			client.sendTable(client.table, 'Initial table');
 			client.ready = true;
 		})
 		.addListener("data", function (data) {
-			position = JSON.parse(data);
-			game.updatePlayer1Position(position.x, position.y);
-		});
+			if (client.type == GameClient.Spectator) {
+				return;
+			}
 
-	this.ws = ws;
-	this.id = id;
-	this.setPov(GameClient.Player1Pov);
-}
-GameClient.Player1Pov = 1;
-GameClient.Player2Pov = 2;
-GameClient.prototype.setPov = function (pov) {
-	if (pov <= GameClient.Player1Pov) {
-		this.pov = GameClient.Player1Pov;
-	} else {
-		this.pov = GameClient.Player2Pov;
-	}
-	return this;
+			var position = JSON.parse(data);
+			var updatePosition = client.game.updatePlayer1Position;
+			if (client.type == GameClient.Player2) {
+				client.reverseEntity(position);
+				updatePosition = client.game.updatePlayer2Position;
+			}
+			updatePosition.call(client.game, position.x, position.y);
+		});
+		
+	this.game.addListener("step", function (state) {
+			client.sendState(clone(state), null);
+		});
 }
 GameClient.prototype.send = function (type, data, message) {
 	data.type = type;
@@ -268,7 +275,7 @@ GameClient.prototype.sendState = function (state, message) {
 		return this;
 	}
 
-	if (this.pov == GameClient.Player2Pov) {
+	if (this.pov == GameClient.Player2) {
 		this.reverseState(state);
 		state.player = state.player2;
 		state.opponent = state.player1;
@@ -285,24 +292,39 @@ GameClient.prototype.sendState = function (state, message) {
 GameClient.prototype.sendTable = function (table, message) {
 	this.send('init', { table : table }, message);
 }
+GameClient.prototype.reverseEntity = function (entity) {
+	entity.x = this.table.width  - entity.x;
+	entity.y = this.table.height - entity.y;
+}
+GameClient.prototype.reverseState = function (state) {
+	this.reverseEntity(state.player1);
+	this.reverseEntity(state.player2);
+	this.reverseEntity(state.puck);
+}
+
+GameClient.Player1   = '1';
+GameClient.Player2   = '2';
+GameClient.Spectator = 'S';
+
 GameClient.prototype.ready = false;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Main server loop
 ;(function () {
-	var server = this;
 	this.clients = [];
 
 	var game = new GameWorld();
-	game.addListener("step", function (state) {
-		for (var clientNum in server.clients) {
-			server.clients[clientNum].sendState(clone(state), null);
-		}
-	})
-	.run();
-	
+	game.run();
+
+	var server = this;
 	ws.createServer(function (ws) {
 		var clientNum = server.clients.length;
-		server.clients[clientNum] = new GameClient(ws, clientNum, game);
+		var clientType = GameClient.Spectator;
+		if (clientNum == 0) {
+			clientType = GameClient.Player1;
+		} else if (clientNum == 1) {
+			clientType = GameClient.Player2;
+		}
+		server.clients[clientNum] = new GameClient(server, game, ws, clientNum, clientType);
 	}).listen(8080);
 })();
