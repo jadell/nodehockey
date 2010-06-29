@@ -203,7 +203,7 @@ GameWorld.prototype.world_halfheight = 25;
 GameWorld.prototype.simulationTimeStep = 1.0 / 60.0;
 GameWorld.prototype.simulationIterations = 10;
 GameWorld.prototype.runIntervalId = null;
-GameWorld.prototype.frameRate = 75;
+GameWorld.prototype.frameRate = GameWorld.prototype.simulationTimeStep * 1000;
 // Tables dimensions
 GameWorld.prototype.table_width = 1.32;
 GameWorld.prototype.table_height = 2.54;
