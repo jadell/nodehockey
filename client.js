@@ -1,3 +1,9 @@
+/**
+ * Copyright (c) 2010 Josh Adell <josh.adell@gmail.com>
+ *
+ * This code is licensed under the MIT License http://www.opensource.org/licenses/mit-license.php
+ *
+ */
 $("document").ready(function () {
 	// Initialize game board
 	var hockeytable = $("#hockeytable");

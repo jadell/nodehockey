@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2010 Josh Adell <josh.adell@gmail.com>
+ *
+ * This code is licensed under the MIT License http://www.opensource.org/licenses/mit-license.php
+ *
+ */
+
 var sys = require("sys"),
     b2d = require("./vendor/box2dnode/box2dnode"),
     ws = require("./vendor/node.ws.js/ws"),
