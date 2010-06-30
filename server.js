@@ -46,11 +46,26 @@ function GameWorld() {
 
 	this.createWorld();
 	this.createTableBoundaries();
+	this.resetGame();
+}
+sys.inherits(GameWorld, events.EventEmitter);
+GameWorld.prototype.resetGame = function () {
+	if (this.puck != null) {
+		this.world.DestroyBody(this.puck);
+		this.world.DestroyBody(this.player1);
+		this.world.DestroyBody(this.player2);
+		this.puck = null;
+		this.player1 = null;
+		this.player2 = null;
+	}
+	
 	this.createPuck();
 	this.createPlayer(1);
 	this.createPlayer(2);
+	
+	this.player1.score = 0;
+	this.player2.score = 0;
 }
-sys.inherits(GameWorld, events.EventEmitter);
 GameWorld.prototype.createPuck = function () {
 	var puckShapeDef = new b2d.b2CircleDef();
 	puckShapeDef.radius = this.puck_radius;
@@ -178,12 +193,14 @@ GameWorld.prototype.getState = function () {
 		player1 : {
 			x : player1Pos.x,
 			y : player1Pos.y,
-			r : this.player1.GetShapeList().GetRadius()
+			r : this.player1.GetShapeList().GetRadius(),
+			score : this.player1.score
 		},
 		player2 : {
 			x : player2Pos.x,
 			y : player2Pos.y,
-			r : this.player2.GetShapeList().GetRadius()
+			r : this.player2.GetShapeList().GetRadius(),
+			score : this.player2.score
 		}
 	}
 }
@@ -271,6 +288,10 @@ function GameClient(server, game, ws, id, type) {
 				updatePosition = client.game.updatePlayer2Position;
 			}
 			updatePosition.call(client.game, position.x, position.y);
+		})
+		.addListener("close", function () {
+			client.ready = false;
+			client.server.removeClient(client.id);
 		});
 		
 	this.game.addListener("step", function (state) {
@@ -325,6 +346,10 @@ GameClient.prototype.ready = false;
 ;(function () {
 	this.clients = [];
 
+	process.addListener('uncaughtException', function (err) {
+	  sys.puts('Caught exception: ' + err);
+	});
+
 	var game = new GameWorld();
 	game.run();
 
@@ -339,4 +364,8 @@ GameClient.prototype.ready = false;
 		}
 		server.clients[clientNum] = new GameClient(server, game, ws, clientNum, clientType);
 	}).listen(8080);
+	
+	this.removeClient = function (id) {
+		delete this.clients[id];
+	}
 })();

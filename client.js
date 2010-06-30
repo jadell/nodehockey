@@ -26,6 +26,17 @@ var GameClient = function (hockeytable, servermessage) {
 
 	var board = null;
 	var ws = new WebSocket("ws://localhost:8080");
+	ws.onconnect = function () {
+		hockeytable.mousemove(function (e) {
+			var x = e.pageX - this.offsetLeft;
+			var y = e.pageY - this.offsetTop;
+			player = board.scaleToGame({
+				x : x,
+				y : y
+			});
+			ws.send(JSON.stringify(player));
+		});
+	}
 	ws.onmessage = function (evt) {
 		var data = JSON.parse(evt.data);
 
@@ -42,17 +53,6 @@ var GameClient = function (hockeytable, servermessage) {
 	ws.onclose = function () {
 		setServerMessage('Connection closed by server.');
 	}
-
-	// Attach mousemove event to game board
-	hockeytable.mousemove(function (e) {
-		var x = e.pageX - this.offsetLeft;
-		var y = e.pageY - this.offsetTop;
-		player = board.scaleToGame({
-			x : x,
-			y : y
-		});
-		ws.send(JSON.stringify(player));
-	});
 }
 
 /**
@@ -117,13 +117,15 @@ var GameBoard = function (hockeytable, inittable) {
 			player : {
 				x : state.player.x,
 				y : state.player.y,
-				r : state.player.r
+				r : state.player.r,
+				score : state.player.score
 			},
 
 			opponent : {
 				x : state.opponent.x,
 				y : state.opponent.y,
-				r : state.opponent.r
+				r : state.opponent.r,
+				score : state.opponent.score
 			}
 		}
 
@@ -159,6 +161,7 @@ var GameBoard = function (hockeytable, inittable) {
 		renderPuck();
 		renderPaddle(true);
 		renderPaddle(false);
+		renderScores(currState.player.score, currState.opponent.score);
 
 		return this;
 	}
@@ -186,6 +189,31 @@ var GameBoard = function (hockeytable, inittable) {
 		ctx.fillStyle = (player) ? playerColor : opponentColor;
 		ctx.arc(paddle.x,paddle.y, paddle.r, radians(0),radians(360));
 		ctx.fill();
+	}
+
+	/**
+	 * Render the scores
+	 *
+	 * @param integer player      player score
+	 * @param integer opponent    opponent score
+	 */
+	function renderScores(player, opponent) {
+		var newScale = 1/scaleFactor;
+		var sidePad = width * .05;
+		var bottomPad = height * .98;
+
+		// We want precise control over text placement
+		ctx.save();
+		ctx.translate(0, tableHeight);
+		ctx.scale(newScale, -newScale);
+		ctx.font = '20px monospace';
+
+		ctx.fillStyle = playerColor;
+		ctx.fillText(player, sidePad, bottomPad);
+		ctx.fillStyle = opponentColor;
+		ctx.fillText(opponent, width-sidePad-ctx.measureText(opponent).width, bottomPad);
+
+		ctx.restore();
 	}
 
 	/**
