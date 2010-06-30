@@ -26,7 +26,7 @@ var GameClient = function (hockeytable, servermessage) {
 
 	var board = null;
 	var ws = new WebSocket("ws://localhost:8080");
-	ws.onconnect = function () {
+	ws.onopen = function () {
 		hockeytable.mousemove(function (e) {
 			var x = e.pageX - this.offsetLeft;
 			var y = e.pageY - this.offsetTop;

@@ -46,7 +46,11 @@ function GameWorld() {
 
 	this.createWorld();
 	this.createTableBoundaries();
+	this.createGoalDetection();
 	this.resetGame();
+
+	this.player1.score = 0;
+	this.player2.score = 0;
 }
 sys.inherits(GameWorld, events.EventEmitter);
 GameWorld.prototype.resetGame = function () {
@@ -62,9 +66,6 @@ GameWorld.prototype.resetGame = function () {
 	this.createPuck();
 	this.createPlayer(1);
 	this.createPlayer(2);
-	
-	this.player1.score = 0;
-	this.player2.score = 0;
 }
 GameWorld.prototype.createPuck = function () {
 	var puckShapeDef = new b2d.b2CircleDef();
@@ -80,6 +81,7 @@ GameWorld.prototype.createPuck = function () {
 	var puckBodyDef = new b2d.b2BodyDef();
 	puckBodyDef.position.Set(this.table_halfwidth, this.table_halfheight);
 	puckBodyDef.bullet = true;
+	puckBodyDef.userData = { entityid : 'puck' };
 
 	this.puck = this.world.CreateBody(puckBodyDef);
 	this.puck.CreateShape(puckShapeDef);
@@ -158,6 +160,18 @@ GameWorld.prototype.createTableBoundaries = function () {
 	midfieldBodyDef.position.Set(this.table_halfwidth, this.table_halfheight);
 	var midfieldBody = this.world.CreateBody(midfieldBodyDef);
 	midfieldBody.CreateShape(midfieldShapeDef);
+}
+GameWorld.prototype.createGoalDetection = function () {
+	var goalListener = new b2d.b2ContactListener();
+	goalListener.Add = function (point) {
+		var entity1 = point.shape1.GetBody().GetUserData();
+		var entity2 = point.shape2.GetBody().GetUserData();
+		if ((entity1 != null && entity1.entityid == "puck")
+		    || (entity2 != null && entity2.entityid == "puck")) {
+			sys.puts("The puck hit something!");
+		}
+	}
+	this.world.SetContactListener(goalListener);
 }
 GameWorld.prototype.createWorld = function () {
 	var worldAABB = new b2d.b2AABB();
@@ -365,7 +379,7 @@ GameClient.prototype.ready = false;
 		server.clients[clientNum] = new GameClient(server, game, ws, clientNum, clientType);
 	}).listen(8080);
 	
-	this.removeClient = function (id) {
-		delete this.clients[id];
+	this.removeClient = function (clientNum) {
+		delete server.clients[clientNum];
 	}
 })();
