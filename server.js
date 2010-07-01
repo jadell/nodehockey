@@ -46,6 +46,8 @@ function GameWorld() {
 
 	this.createWorld();
 	this.createTableBoundaries();
+	this.createGoal(1);
+	this.createGoal(2);
 	this.createGoalDetection();
 	this.resetGame();
 
@@ -81,7 +83,7 @@ GameWorld.prototype.createPuck = function () {
 	var puckBodyDef = new b2d.b2BodyDef();
 	puckBodyDef.position.Set(this.table_halfwidth, this.table_halfheight);
 	puckBodyDef.bullet = true;
-	puckBodyDef.userData = { entityid : 'puck' };
+	puckBodyDef.userData = { type : 'puck' };
 
 	this.puck = this.world.CreateBody(puckBodyDef);
 	this.puck.CreateShape(puckShapeDef);
@@ -95,6 +97,7 @@ GameWorld.prototype.createPlayer = function (player) {
 	playerShapeDef.restitution = this.paddle_restitution;
 
 	var playerBodyDef = new b2d.b2BodyDef();
+	playerBodyDef.userData = { type : 'player', id : player };
 	if (player == 1) {
 		playerBodyDef.position.Set(this.table_halfwidth, this.paddle_radius);
 	} else {
@@ -121,6 +124,22 @@ GameWorld.prototype.createPlayer = function (player) {
 		this.player2 = body;
 	}
 }
+GameWorld.prototype.createGoal = function (player) {
+	var goalBodyDef = new b2d.b2BodyDef();
+	var goalShapeDef = new b2d.b2PolygonDef();
+	goalShapeDef.SetAsBox(this.goal_halfwidth, this.table_sideThicknessHalf);
+
+	var goalBodyDef = new b2d.b2BodyDef();
+	goalBodyDef.userData = { type : 'goal', id : player };
+	if (player == 1) {
+		goalBodyDef.position.Set(this.table_halfwidth, this.table_height + this.table_sideThicknessHalf);
+	} else {
+		goalBodyDef.position.Set(this.table_halfwidth, -this.table_sideThicknessHalf);
+	}
+
+	var goalBody = this.world.CreateBody(goalBodyDef);
+	goalBody.CreateShape(goalShapeDef);
+}
 GameWorld.prototype.createTableBoundaries = function () {
 	// Table top and bottom
 	var endBodyDef = new b2d.b2BodyDef();
@@ -128,10 +147,12 @@ GameWorld.prototype.createTableBoundaries = function () {
 	endShapeDef.SetAsBox(this.table_halfwidth, this.table_sideThicknessHalf);
 
 	endBodyDef.position.Set(this.table_halfwidth, this.table_height + this.table_sideThicknessHalf);
+	endBodyDef.userData = { type : 'wall' , id : 'top' };
 	var topEndBody = this.world.CreateBody(endBodyDef);
 	topEndBody.CreateShape(endShapeDef);
 
 	endBodyDef.position.Set(this.table_halfwidth, -this.table_sideThicknessHalf);
+	endBodyDef.userData = { type : 'wall' , id : 'bottom' };
 	var bottomEndBody = this.world.CreateBody(endBodyDef);
 	bottomEndBody.CreateShape(endShapeDef);
 
@@ -141,10 +162,12 @@ GameWorld.prototype.createTableBoundaries = function () {
 	sideShapeDef.SetAsBox(this.table_sideThicknessHalf, this.table_halfheight);
 
 	sideBodyDef.position.Set(this.table_width + this.table_sideThicknessHalf, this.table_halfheight);
+	sideBodyDef.userData = { type : 'wall' , id : 'right' };
 	var rightSideBody = this.world.CreateBody(sideBodyDef);
 	rightSideBody.CreateShape(sideShapeDef);
 
 	sideBodyDef.position.Set(-this.table_sideThicknessHalf, this.table_halfheight);
+	sideBodyDef.userData = { type : 'wall' , id : 'left' };
 	var leftSideBody = this.world.CreateBody(sideBodyDef);
 	leftSideBody.CreateShape(sideShapeDef);
 	
@@ -158,6 +181,7 @@ GameWorld.prototype.createTableBoundaries = function () {
 	midfieldShapeDef.filter = midfieldFilter;
 	
 	midfieldBodyDef.position.Set(this.table_halfwidth, this.table_halfheight);
+	midfieldBodyDef.userData = { type : 'wall' , id : 'midfield' };
 	var midfieldBody = this.world.CreateBody(midfieldBodyDef);
 	midfieldBody.CreateShape(midfieldShapeDef);
 }
@@ -166,9 +190,16 @@ GameWorld.prototype.createGoalDetection = function () {
 	goalListener.Add = function (point) {
 		var entity1 = point.shape1.GetBody().GetUserData();
 		var entity2 = point.shape2.GetBody().GetUserData();
-		if ((entity1 != null && entity1.entityid == "puck")
-		    || (entity2 != null && entity2.entityid == "puck")) {
-			sys.puts("The puck hit something!");
+		if (entity1.type == "puck" || entity2.type == "puck") {
+			if (entity1.type == "goal" || entity2.type == "goal") {
+				var goalFor = null;
+				if (entity1.type == "goal") {
+					goalFor = entity1.id;
+				} else {
+					goalFor = entity2.id;
+				}
+				sys.puts("Goal scored for "+goalFor);
+			}
 		}
 	}
 	this.world.SetContactListener(goalListener);
@@ -220,8 +251,9 @@ GameWorld.prototype.getState = function () {
 }
 GameWorld.prototype.getTableDimensions = function () {
 	return {
-		width : this.table_width,
+		width  : this.table_width,
 		height : this.table_height,
+		goal   : this.goal_width
 	}
 }
 GameWorld.prototype.updatePlayerPosition = function (player, x, y) {
@@ -255,6 +287,9 @@ GameWorld.prototype.table_sideThicknessHalf =
 	GameWorld.prototype.table_sideThickness / 2;
 GameWorld.prototype.table_midfieldThicknessHalf =
 	GameWorld.prototype.table_midfieldThickness / 2;
+// Goals
+GameWorld.prototype.goal_width = GameWorld.prototype.table_halfwidth;
+GameWorld.prototype.goal_halfwidth = GameWorld.prototype.goal_width / 2;
 // Paddle dimensions
 GameWorld.prototype.paddle_radius = 0.1;
 GameWorld.prototype.paddle_mass = 0.09;

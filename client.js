@@ -65,6 +65,7 @@ var GameClient = function (hockeytable, servermessage) {
  */
 var GameBoard = function (hockeytable, inittable) {
 	const fieldColor = "#FFFFFF";
+	const goalColor = "#00FF00";
 	const puckColor = "#000000";
 	const playerColor = "#0000FF";
 	const opponentColor = "#FF0000";
@@ -74,6 +75,7 @@ var GameBoard = function (hockeytable, inittable) {
 	
 	var tableHeight = inittable.height;
 	var tableWidth  = inittable.width;
+    var goalWidth   = inittable.goal;
 	var tableMidX   = tableWidth/2;
  	var tableMidY   = tableHeight/2;
 	var tableRatio  = tableWidth / tableHeight;
@@ -155,6 +157,16 @@ var GameBoard = function (hockeytable, inittable) {
  		ctx.moveTo(0, tableMidY);
  		ctx.lineTo(tableWidth, tableMidY);
  		ctx.stroke();
+ 		ctx.closePath();
+
+		// Goals
+ 		ctx.beginPath();
+		ctx.lineWidth = singlePixel;
+		ctx.fillStyle = goalColor;
+ 		ctx.fillRect((tableWidth-goalWidth)/2,0, goalWidth,singlePixel*5);
+ 		ctx.strokeRect((tableWidth-goalWidth)/2,0, goalWidth,singlePixel*5);
+ 		ctx.fillRect((tableWidth-goalWidth)/2, tableHeight-(singlePixel*5), goalWidth,singlePixel*5);
+ 		ctx.strokeRect((tableWidth-goalWidth)/2,tableHeight-(singlePixel*5), goalWidth,singlePixel*5);
  		ctx.closePath();
 
 		// Game pieces
