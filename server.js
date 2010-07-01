@@ -375,7 +375,7 @@ GameClient.prototype.sendState = function (state, message) {
 	return this;
 }
 GameClient.prototype.sendTable = function (table, message) {
-	this.send('init', { table : table }, message);
+	this.send('init', { table : table , clienttype : this.type }, message);
 }
 GameClient.prototype.reverseEntity = function (entity) {
 	entity.x = this.table.width  - entity.x;

@@ -5,27 +5,30 @@
  *
  */
 $("document").ready(function () {
-	// Initialize game board
-	var hockeytable = $("#hockeytable");
-	var servermessage = $("#servermessage");
-	var gameclient = new GameClient(hockeytable, servermessage);
+	$("#connect").click(function () {
+		var host = $("#server").val()+":"+$("#port").val();
+		var hockeytable = $("#hockeytable");
+		var servermessage = $("#servermessage");
+		var gameclient = new GameClient(host, hockeytable, servermessage);
+	});
 });
 
 /**
  * Returns a new game client
  *
+ * @param host             string host:port to connect to
  * @param hockeytable      a JQuery object wrapped around a canvas element
  * @param servermessage    a JQuery object wrapped around the element in which to display server messages
  * @return GameClient object
  */
-var GameClient = function (hockeytable, servermessage) {
+var GameClient = function (host, hockeytable, servermessage) {
 	
 	var setServerMessage = function (message) {
 		servermessage.html(message.replace(/\n/g, '<br />') + '<br />' + servermessage.html());
 	}
 
 	var board = null;
-	var ws = new WebSocket("ws://localhost:8080");
+	var ws = new WebSocket("ws://"+host);
 	ws.onopen = function () {
 		hockeytable.mousemove(function (e) {
 			var x = e.pageX - this.offsetLeft;
@@ -42,6 +45,13 @@ var GameClient = function (hockeytable, servermessage) {
 
 		if (data.type == 'init') {
 			board = new GameBoard(hockeytable, data.table);
+			data.message = "Connected to "+host+"\nYou are ";
+			if (data.clienttype == '1' || data.clienttype == '2') {
+				data.message += "player "+data.clienttype+"."
+			} else {
+				data.message += "a spectator."
+			}
+
 		} else if (data.type == 'state') {
 			board.setEntities(data.state).renderBoard();
 		}
@@ -51,7 +61,7 @@ var GameClient = function (hockeytable, servermessage) {
 		}
 	}
 	ws.onclose = function () {
-		setServerMessage('Connection closed by server.');
+		setServerMessage('Connection closed.');
 	}
 }
 
@@ -80,10 +90,9 @@ var GameBoard = function (hockeytable, inittable) {
  	var tableMidY   = tableHeight/2;
 	var tableRatio  = tableWidth / tableHeight;
 	
-	var height = 400;
-	var width = height * tableRatio;
+	var height = hockeytable.attr("height");
+	var width  = height * tableRatio;
  	hockeytable.attr("width", width);
-	hockeytable.attr("height", height);
 
 	var scaleFactor = height / tableHeight;
 	var singlePixel = 1 / scaleFactor;
