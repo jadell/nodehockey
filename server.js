@@ -40,154 +40,225 @@ function clone(obj) {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// GameWorld
-function GameWorld() {
+// GameSimulator
+function GameSimulator() {
+	// Calculated off prototype, adjustable before we construct but not after
+	var worldHalfWidth  = this.world_halfwidth;
+	var worldHalfHeight = this.world_halfheight;
+	var tableWidth      = this.table_width;
+	var tableHeight     = this.table_height;
+
+	var tableHalfWidth  = tableWidth / 2;
+	var tableHalfHeight = tableHeight / 2;
+	var goalWidth       = tableHalfWidth;
+	var goalHalfWidth   = goalWidth / 2;
+	var sideThicknessHalf = 0.1;
+	var midfieldThicknessHalf = 0.01;
+
+	var puck            = null;
+	var puckMass        = this.puck_mass;
+	var puckRadius      = this.puck_radius;
+	var puckFriction    = this.puck_friction;
+	var puckRestitution = this.puck_restitution;
+	var puckDensity     = puckMass / (b2d.b2Settings.b2_pi * puckRadius * puckRadius);
+
+	var player1           = null;
+	var player2           = null;
+	var paddleMass        = this.paddle_mass;
+	var paddleRadius      = this.paddle_radius;
+	var paddleFriction    = this.paddle_friction;
+	var paddleRestitution = this.paddle_restitution;
+	var paddleDensity     = paddleMass / (b2d.b2Settings.b2_pi * paddleRadius * paddleRadius);
+	
+	var puckStart    = new b2d.b2Vec2(tableHalfWidth, tableHalfHeight);
+	var player1Start = new b2d.b2Vec2(tableHalfWidth, paddleRadius);
+	var player2Start = new b2d.b2Vec2(tableHalfWidth, tableHeight - paddleRadius);
+
+	// Gravity points into the board, not "down"
+	var gravity = new b2d.b2Vec2(0.0, 0.0);
+	var doSleep = true;
+	var worldAABB = new b2d.b2AABB();
+	worldAABB.lowerBound.Set(-worldHalfWidth, -worldHalfHeight);
+	worldAABB.upperBound.Set( worldHalfWidth,  worldHalfHeight);
+	var world = new b2d.b2World(worldAABB, gravity, doSleep);
+
+	// Create a box entity
+	function createBox(type, id, center, halfWidth, halfHeight, filterGroup) {
+		var shapeDef = new b2d.b2PolygonDef();
+		shapeDef.SetAsBox(halfWidth, halfHeight);
+		if (filterGroup != null) {
+			var filter = new b2d.b2FilterData();
+			filter.groupIndex = filterGroup;
+			shapeDef.filter = filter;
+		}
+
+		var bodyDef = new b2d.b2BodyDef();
+		bodyDef.position.Set(center.x, center.y);
+		bodyDef.userData = { type : type , id : id };
+		var body = world.CreateBody(bodyDef);
+		body.CreateShape(shapeDef);
+		return body;
+	}
+
+	// Table boundaries
+	createBox('wall', 'top', new b2d.b2Vec2(tableHalfWidth, tableHeight + sideThicknessHalf),
+		tableHalfWidth, sideThicknessHalf);
+	createBox('wall', 'bottom', new b2d.b2Vec2(tableHalfWidth, -sideThicknessHalf),
+		tableHalfWidth, sideThicknessHalf);
+	createBox('wall', 'right', new b2d.b2Vec2(tableWidth + sideThicknessHalf, tableHalfHeight),
+		sideThicknessHalf, tableHalfHeight);
+	createBox('wall', 'left', new b2d.b2Vec2(-sideThicknessHalf, tableHalfHeight),
+		sideThicknessHalf, tableHalfHeight);
+	createBox('wall', 'midfield', new b2d.b2Vec2(tableHalfWidth, tableHalfHeight),
+		tableHalfWidth, midfieldThicknessHalf, -1);
+
+	// Goals
+	createBox('goal', '1', new b2d.b2Vec2(tableHalfWidth, tableHeight + sideThicknessHalf),
+		goalHalfWidth, sideThicknessHalf);
+	createBox('goal', '2', new b2d.b2Vec2(tableHalfWidth, -sideThicknessHalf),
+		goalHalfWidth, sideThicknessHalf);
+
+	// Create a circle entity
+	function createCircle(type, id, center, radius, density, friction, restitution, filterGroup) {
+		var shapeDef = new b2d.b2CircleDef();
+		shapeDef.radius = radius;
+		shapeDef.density = density;
+		shapeDef.friction = friction;
+		shapeDef.restitution = restitution;
+		if (filterGroup != null) {
+			var filter = new b2d.b2FilterData();
+			filter.groupIndex = filterGroup;
+			shapeDef.filter = filter;
+		}
+		
+		var bodyDef = new b2d.b2BodyDef();
+		bodyDef.position.Set(center.x, center.y);
+		bodyDef.userData = { type : type , id : id };
+		var body = world.CreateBody(bodyDef);
+		body.CreateShape(shapeDef);
+		body.SetMassFromShapes();
+		return body;
+	}
+	
+	// Attach a movable handle to an entity
+	function attachHandle(body) {
+		var handleJointDef = new b2d.b2MouseJointDef();
+		handleJointDef.body1 = world.GetGroundBody();
+		handleJointDef.body2 = body;
+		handleJointDef.collideConnected = true;
+		handleJointDef.maxForce = 10000.0 * body.GetMass();
+		handleJointDef.target = body.GetPosition();
+		handleJointDef.dampingRatio = 0;
+		handleJointDef.frequencyHz = 100;
+		var handle = world.CreateJoint(handleJointDef);
+		return handle;
+	}
+
+	function updateEntityPosition(handle, x, y) {
+		var newPosition = new b2d.b2Vec2(x, y);
+		handle.GetBody2().WakeUp();
+		handle.SetTarget(newPosition);
+	}
+
+	// Simulator interface
+	this.reset = function () {
+		if (puck != null) {
+			world.DestroyBody(puck);
+			world.DestroyBody(player1.GetBody2());
+			world.DestroyBody(player2.GetBody2());
+		}
+		
+		puck = createCircle('puck', '1', puckStart,
+			puckRadius, puckDensity, puckFriction, puckRestitution, -1);
+		puck.SetBullet(true);
+
+		player1 = attachHandle(createCircle('player', '1', player1Start,
+			paddleRadius, paddleDensity, paddleFriction, paddleRestitution));
+		player2 = attachHandle(createCircle('player', '2', player2Start,
+			paddleRadius, paddleDensity, paddleFriction, paddleRestitution));
+	}
+	this.reset();
+
+	this.updatePlayer1Position = function (x, y) {
+		updateEntityPosition(player1, x, y);
+	}
+	this.updatePlayer2Position = function (x, y) {
+		updateEntityPosition(player2, x, y);
+	}
+	this.getTableDimensions = function () {
+		return {
+			width  : tableWidth,
+			height : tableHeight,
+			goal   : goalWidth
+		};
+	}
+	this.getState = function () {
+		var p1 = player1.GetBody2();
+		var p2 = player2.GetBody2();
+
+		var puckPos    = puck.GetPosition();
+		var player1Pos = p1.GetPosition();
+		var player2Pos = p2.GetPosition();
+		return {
+			puck : {
+				x : puckPos.x,
+				y : puckPos.y,
+				r : puck.GetShapeList().GetRadius()
+			},
+			player1 : {
+				x : player1Pos.x,
+				y : player1Pos.y,
+				r : p1.GetShapeList().GetRadius()
+			},
+			player2 : {
+				x : player2Pos.x,
+				y : player2Pos.y,
+				r : p2.GetShapeList().GetRadius()
+			}
+		};
+	}
+	this.step = function (t, i) {
+		world.Step(t, i);
+	}
+	this.setCollisionListener = function (listener) {
+		var goalListener = new b2d.b2ContactListener();
+		goalListener.Add = listener;
+		world.SetContactListener(goalListener);
+	}
+}
+
+// World dimensions
+GameSimulator.prototype.world_halfwidth = 25;
+GameSimulator.prototype.world_halfheight = 25;
+// Tables dimensions
+GameSimulator.prototype.table_width = 1.32;
+GameSimulator.prototype.table_height = 2.54;
+// Paddle dimensions
+GameSimulator.prototype.paddle_radius = 0.1;
+GameSimulator.prototype.paddle_mass = 0.8;
+GameSimulator.prototype.paddle_friction = 0;
+GameSimulator.prototype.paddle_restitution = 0;
+// Puck dimensions
+GameSimulator.prototype.puck_radius = 0.08;
+GameSimulator.prototype.puck_mass = 1.0;
+GameSimulator.prototype.puck_friction = 0.1;
+GameSimulator.prototype.puck_restitution = 0.95;
+
+////////////////////////////////////////////////////////////////////////////////
+// Game
+function Game() {
+	var runIntervalId = null;
+	var game = this;
+	var score = {
+		1 : 0,
+		2 : 0
+	};
+
 	events.EventEmitter.call(this);
 
-	this.createWorld();
-	this.createTableBoundaries();
-	this.createGoal(1);
-	this.createGoal(2);
-	this.createGoalDetection();
-	this.resetGame();
-
-	this.player1.score = 0;
-	this.player2.score = 0;
-}
-sys.inherits(GameWorld, events.EventEmitter);
-GameWorld.prototype.resetGame = function () {
-	if (this.puck != null) {
-		this.world.DestroyBody(this.puck);
-		this.world.DestroyBody(this.player1);
-		this.world.DestroyBody(this.player2);
-		this.puck = null;
-		this.player1 = null;
-		this.player2 = null;
-	}
-	
-	this.createPuck();
-	this.createPlayer(1);
-	this.createPlayer(2);
-}
-GameWorld.prototype.createPuck = function () {
-	var puckShapeDef = new b2d.b2CircleDef();
-	puckShapeDef.radius = this.puck_radius;
-	puckShapeDef.density = this.puck_density;
-	puckShapeDef.friction = this.puck_friction;
-	puckShapeDef.restitution = this.puck_restitution;
-
-	var puckFilter = new b2d.b2FilterData();
-	puckFilter.groupIndex = -1;
-	puckShapeDef.filter = puckFilter;
-
-	var puckBodyDef = new b2d.b2BodyDef();
-	puckBodyDef.position.Set(this.table_halfwidth, this.table_halfheight);
-	puckBodyDef.bullet = true;
-	puckBodyDef.userData = { type : 'puck' };
-
-	this.puck = this.world.CreateBody(puckBodyDef);
-	this.puck.CreateShape(puckShapeDef);
-	this.puck.SetMassFromShapes();
-}
-GameWorld.prototype.createPlayer = function (player) {
-	var playerShapeDef = new b2d.b2CircleDef();
-	playerShapeDef.radius = this.paddle_radius;
-	playerShapeDef.density = this.paddle_density;
-	playerShapeDef.friction = this.paddle_friction;
-	playerShapeDef.restitution = this.paddle_restitution;
-
-	var playerBodyDef = new b2d.b2BodyDef();
-	playerBodyDef.userData = { type : 'player', id : player };
-	if (player == 1) {
-		playerBodyDef.position.Set(this.table_halfwidth, this.paddle_radius);
-	} else {
-		playerBodyDef.position.Set(this.table_halfwidth, this.table_height - this.paddle_radius);
-	}
-
-	var body = this.world.CreateBody(playerBodyDef);
-	body.CreateShape(playerShapeDef);
-	body.SetMassFromShapes();
-
-	var handleJointDef = new b2d.b2MouseJointDef();
-	handleJointDef.body1 = this.world.m_groundBody;
-	handleJointDef.body2 = body;
-	handleJointDef.collideConnected = true;
-	handleJointDef.maxForce = 10000.0 * body.GetMass();
-	handleJointDef.target = body.GetPosition();
-	handleJointDef.dampingRatio = 0;
-	handleJointDef.frequencyHz = 100;
-	body.handle = this.world.CreateJoint(handleJointDef);
-	
-	if (player == 1) {
-		this.player1 = body;
-	} else {
-		this.player2 = body;
-	}
-}
-GameWorld.prototype.createGoal = function (player) {
-	var goalBodyDef = new b2d.b2BodyDef();
-	var goalShapeDef = new b2d.b2PolygonDef();
-	goalShapeDef.SetAsBox(this.goal_halfwidth, this.table_sideThicknessHalf);
-
-	var goalBodyDef = new b2d.b2BodyDef();
-	goalBodyDef.userData = { type : 'goal', id : player };
-	if (player == 1) {
-		goalBodyDef.position.Set(this.table_halfwidth, this.table_height + this.table_sideThicknessHalf);
-	} else {
-		goalBodyDef.position.Set(this.table_halfwidth, -this.table_sideThicknessHalf);
-	}
-
-	var goalBody = this.world.CreateBody(goalBodyDef);
-	goalBody.CreateShape(goalShapeDef);
-}
-GameWorld.prototype.createTableBoundaries = function () {
-	// Table top and bottom
-	var endBodyDef = new b2d.b2BodyDef();
-	var endShapeDef = new b2d.b2PolygonDef();
-	endShapeDef.SetAsBox(this.table_halfwidth, this.table_sideThicknessHalf);
-
-	endBodyDef.position.Set(this.table_halfwidth, this.table_height + this.table_sideThicknessHalf);
-	endBodyDef.userData = { type : 'wall' , id : 'top' };
-	var topEndBody = this.world.CreateBody(endBodyDef);
-	topEndBody.CreateShape(endShapeDef);
-
-	endBodyDef.position.Set(this.table_halfwidth, -this.table_sideThicknessHalf);
-	endBodyDef.userData = { type : 'wall' , id : 'bottom' };
-	var bottomEndBody = this.world.CreateBody(endBodyDef);
-	bottomEndBody.CreateShape(endShapeDef);
-
-	// Table sides
-	var sideBodyDef = new b2d.b2BodyDef();
-	var sideShapeDef = new b2d.b2PolygonDef();
-	sideShapeDef.SetAsBox(this.table_sideThicknessHalf, this.table_halfheight);
-
-	sideBodyDef.position.Set(this.table_width + this.table_sideThicknessHalf, this.table_halfheight);
-	sideBodyDef.userData = { type : 'wall' , id : 'right' };
-	var rightSideBody = this.world.CreateBody(sideBodyDef);
-	rightSideBody.CreateShape(sideShapeDef);
-
-	sideBodyDef.position.Set(-this.table_sideThicknessHalf, this.table_halfheight);
-	sideBodyDef.userData = { type : 'wall' , id : 'left' };
-	var leftSideBody = this.world.CreateBody(sideBodyDef);
-	leftSideBody.CreateShape(sideShapeDef);
-	
-	// Mid-field os a line that puck can cross but not paddles
-	var midfieldShapeDef = new b2d.b2PolygonDef();
-	var midfieldFilter = new b2d.b2FilterData();
-	var midfieldBodyDef = new b2d.b2BodyDef();
-
-	midfieldShapeDef.SetAsBox(this.table_halfwidth, this.table_midfieldThicknessHalf);
-	midfieldFilter.groupIndex = -1;
-	midfieldShapeDef.filter = midfieldFilter;
-	
-	midfieldBodyDef.position.Set(this.table_halfwidth, this.table_halfheight);
-	midfieldBodyDef.userData = { type : 'wall' , id : 'midfield' };
-	var midfieldBody = this.world.CreateBody(midfieldBodyDef);
-	midfieldBody.CreateShape(midfieldShapeDef);
-}
-GameWorld.prototype.createGoalDetection = function () {
-	var goalListener = new b2d.b2ContactListener();
-	goalListener.Add = function (point) {
+	var scoreOccurred = false;
+	var sim = new GameSimulator();
+	sim.setCollisionListener(function (point) {
 		var entity1 = point.shape1.GetBody().GetUserData();
 		var entity2 = point.shape2.GetBody().GetUserData();
 		if (entity1.type == "puck" || entity2.type == "puck") {
@@ -198,116 +269,47 @@ GameWorld.prototype.createGoalDetection = function () {
 				} else {
 					goalFor = entity2.id;
 				}
-				sys.puts("Goal scored for "+goalFor);
+				score[goalFor]++;
+				// Simulator won't let us reset in the contact handler, so flag for reset later
+				scoreOccurred = true;
 			}
 		}
-	}
-	this.world.SetContactListener(goalListener);
-}
-GameWorld.prototype.createWorld = function () {
-	var worldAABB = new b2d.b2AABB();
-	worldAABB.lowerBound.Set(-this.world_halfwidth, -this.world_halfheight);
-	worldAABB.upperBound.Set( this.world_halfwidth,  this.world_halfheight);
-	// No gravity, camera is looking straight down
-	var gravity = new b2d.b2Vec2(0.0, 0.0);
-	var doSleep = true;
-	this.world = new b2d.b2World(worldAABB, gravity, doSleep);
-}
-GameWorld.prototype.run = function () {
-	this.runIntervalId = setInterval(function (game, t, i) {
-			game.world.Step(t, i);
-			game.emit("step", game.getState());
-		}, this.frameRate, this, this.simulationTimeStep, this.simulationIterations);
-		
-	this.emit("run");
-}
-GameWorld.prototype.pause = function () {
-	clearInterval(this.runIntervalId);
-	this.emit("pause");
-}
-GameWorld.prototype.getState = function () {
-	var puckPos    = this.puck.GetPosition();
-	var player1Pos = this.player1.GetPosition();
-	var player2Pos = this.player2.GetPosition();
-	return {
-		puck : {
-			x : puckPos.x,
-			y : puckPos.y,
-			r : this.puck.GetShapeList().GetRadius()
-		},
-		player1 : {
-			x : player1Pos.x,
-			y : player1Pos.y,
-			r : this.player1.GetShapeList().GetRadius(),
-			score : this.player1.score
-		},
-		player2 : {
-			x : player2Pos.x,
-			y : player2Pos.y,
-			r : this.player2.GetShapeList().GetRadius(),
-			score : this.player2.score
-		}
-	}
-}
-GameWorld.prototype.getTableDimensions = function () {
-	return {
-		width  : this.table_width,
-		height : this.table_height,
-		goal   : this.goal_width
-	}
-}
-GameWorld.prototype.updatePlayerPosition = function (player, x, y) {
-	var newPosition = new b2d.b2Vec2(x, y);
-	player.WakeUp();
-	player.handle.SetTarget(newPosition);
-}
-GameWorld.prototype.updatePlayer1Position = function (x, y) {
-	this.updatePlayerPosition(this.player1, x, y);
-}
-GameWorld.prototype.updatePlayer2Position = function (x, y) {
-	this.updatePlayerPosition(this.player2, x, y);
-}
+	});
 
-GameWorld.prototype.world = null;
-GameWorld.prototype.world_halfwidth = 25;
-GameWorld.prototype.world_halfheight = 25;
-GameWorld.prototype.simulationTimeStep = 1.0 / 60.0;
-GameWorld.prototype.simulationIterations = 10;
-GameWorld.prototype.runIntervalId = null;
-GameWorld.prototype.frameRate = GameWorld.prototype.simulationTimeStep * 1000;
-// Tables dimensions
-GameWorld.prototype.table_width = 1.32;
-GameWorld.prototype.table_height = 2.54;
-GameWorld.prototype.table_halfwidth = GameWorld.prototype.table_width / 2;
-GameWorld.prototype.table_halfheight = GameWorld.prototype.table_height / 2;
-// Boundary dimensions
-GameWorld.prototype.table_sideThickness = 0.2;
-GameWorld.prototype.table_midfieldThickness = 0.02;
-GameWorld.prototype.table_sideThicknessHalf =
-	GameWorld.prototype.table_sideThickness / 2;
-GameWorld.prototype.table_midfieldThicknessHalf =
-	GameWorld.prototype.table_midfieldThickness / 2;
-// Goals
-GameWorld.prototype.goal_width = GameWorld.prototype.table_halfwidth;
-GameWorld.prototype.goal_halfwidth = GameWorld.prototype.goal_width / 2;
-// Paddle dimensions
-GameWorld.prototype.paddle_radius = 0.1;
-GameWorld.prototype.paddle_mass = 0.09;
-GameWorld.prototype.paddle_density =
-	GameWorld.prototype.paddle_mass / (b2d.b2Settings.b2_pi * GameWorld.prototype.paddle_radius * GameWorld.prototype.paddle_radius);
-GameWorld.prototype.paddle_friction = 0;
-GameWorld.prototype.paddle_restitution = 0;
-// Puck dimensions
-GameWorld.prototype.puck_radius = 0.08;
-GameWorld.prototype.puck_mass = 4.0;
-GameWorld.prototype.puck_density =
-	GameWorld.prototype.puck_mass / (b2d.b2Settings.b2_pi * GameWorld.prototype.puck_radius * GameWorld.prototype.puck_radius);
-GameWorld.prototype.puck_friction = 0.1;
-GameWorld.prototype.puck_restitution = 0.95;
-// Game entities
-GameWorld.prototype.puck = null;
-GameWorld.prototype.player1 = null;
-GameWorld.prototype.player2 = null;
+	// Interface
+	this.run = function () {
+		runIntervalId = setInterval(function () {
+				sim.step(game.simulationTimeStep, game.simulationIterations);
+				if (scoreOccurred) {
+					sim.reset();
+					scoreOccurred = false;
+				}
+				var state = sim.getState();
+				state.player1.score = score[1];
+				state.player2.score = score[2];
+				game.emit("step", state);
+			}, game.frameRate);
+		game.emit("run");
+	}
+	this.pause = function () {
+		clearInterval(runIntervalId);
+		game.emit("pause");
+	}
+	this.getTableDimensions = function () {
+		return sim.getTableDimensions();
+	}
+	this.updatePlayer1Position = function (x, y) {
+		sim.updatePlayer1Position(x, y);
+	}
+	this.updatePlayer2Position = function (x, y) {
+		sim.updatePlayer2Position(x, y);
+	}
+}
+sys.inherits(Game, events.EventEmitter);
+
+Game.prototype.simulationTimeStep = 1.0 / 60.0;
+Game.prototype.simulationIterations = 10;
+Game.prototype.frameRate = Game.prototype.simulationTimeStep * 1000;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Client
@@ -344,7 +346,7 @@ function GameClient(server, game, ws, id, type) {
 		});
 		
 	this.game.addListener("step", function (state) {
-			client.sendState(clone(state), null);
+			client.sendState(state, null);
 		});
 }
 GameClient.prototype.send = function (type, data, message) {
@@ -357,6 +359,7 @@ GameClient.prototype.sendState = function (state, message) {
 		return this;
 	}
 
+	state = clone(state);
 	if (this.pov == GameClient.Player2) {
 		this.reverseState(state);
 		state.player = state.player2;
@@ -393,28 +396,28 @@ GameClient.prototype.ready = false;
 ////////////////////////////////////////////////////////////////////////////////
 // Main server loop
 ;(function () {
-	this.clients = [];
+	var clients = [];
 
 	process.addListener('uncaughtException', function (err) {
 	  sys.puts('Caught exception: ' + err);
 	});
 
-	var game = new GameWorld();
+	var game = new Game();
 	game.run();
 
 	var server = this;
 	ws.createServer(function (ws) {
-		var clientNum = server.clients.length;
+		var clientNum = clients.length;
 		var clientType = GameClient.Spectator;
 		if (clientNum == 0) {
 			clientType = GameClient.Player1;
 		} else if (clientNum == 1) {
 			clientType = GameClient.Player2;
 		}
-		server.clients[clientNum] = new GameClient(server, game, ws, clientNum, clientType);
+		clients[clientNum] = new GameClient(server, game, ws, clientNum, clientType);
 	}).listen(8080);
 	
 	this.removeClient = function (clientNum) {
-		delete server.clients[clientNum];
+		delete clients[clientNum];
 	}
 })();
